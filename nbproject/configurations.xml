@@ -18,6 +18,8 @@
       <itemPath>addressbus.asm</itemPath>
       <itemPath>databus.asm</itemPath>
       <itemPath>rom.asm</itemPath>
+      <itemPath>usart_hw.asm</itemPath>
+      <itemPath>usart_sw.asm</itemPath>
     </logicalFolder>
     <logicalFolder name="ExternalFiles"
                    displayName="Important Files"

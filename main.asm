@@ -126,9 +126,14 @@
 #define		Z80_RESET_LAT        LATC
 #define		Z80_RESET_TRIS       TRISC
   
-#define		Z80_WAIT_PIN         2
-#define		Z80_WAIT_LAT         LATC
-#define		Z80_WAIT_TRIS        TRISC
+#define		Z80_IOREQ_PIN	     2
+#define		Z80_IOREQ_LAT        LATC
+#define		Z80_IOREQ_TRIS       TRISC
+#define		Z80_IOREQ_PORT       PORTC
+  
+#define		Z80_WAIT_PIN         0
+#define		Z80_WAIT_LAT         LATB
+#define		Z80_WAIT_TRIS        TRISB
   
 #define		Z80_BUSREQ_PIN       4
 #define		Z80_BUSREQ_LAT       LATB
@@ -138,7 +143,12 @@
 #define		Z80_BUSACK_PIN       5
 #define		Z80_BUSACK_LAT       LATB
 #define		Z80_BUSACK_TRIS      TRISB
-#define		Z80_BUSACK_PORT      PORTB 
+#define		Z80_BUSACK_PORT      PORTB
+  
+#define		Z80_WAITRES_PIN      3
+#define		Z80_WAITRES_LAT      LATB
+#define		Z80_WAITRES_TRIS     TRISB
+#define		Z80_WAITRES_PORT     PORTB  
 
 #define _EI_ bsf INTCON, 7 ; GIE
 #define _DI_ bcf INTCON, 7 ; GIE  
@@ -184,6 +194,13 @@ EXTERN databus_init
 EXTERN databusmode_set
 EXTERN databus_write
 EXTERN databus_read
+	    
+EXTERN usart_init
+EXTERN usart_putchar
+EXTERN usart_getchar
+EXTERN usart_newline
+EXTERN usart_getmessages
+EXTERN usart_hex2ascii
 	    
 EXTERN rom_data
 	    
@@ -276,6 +293,21 @@ ISRH      CODE                        ; let linker place high ISR routine
 HIGH_ISR  
 
           ; Insert High Priority ISR Here
+	  
+	  movlw 'I'
+	  call usart_putchar
+	  
+	  call databus_read
+	  call usart_hex2ascii
+	  
+	  call addressbus_read
+	  call usart_hex2ascii
+	  
+	  bcf INTCON, INT0IF
+	  
+	  bcf Z80_WAITRES_LAT, Z80_WAITRES_PIN
+	  nop
+	  bsf Z80_WAITRES_LAT, Z80_WAITRES_PIN
 
           RETFIE  FAST
 
@@ -292,6 +324,9 @@ LOW_ISR
           MOVFF   BSR, BSR_TEMP       ; save bankselect register
 
           ; Insert Low Priority ISR Here
+	  
+	  movlw 'J'
+	  call usart_putchar
 
           ; Context Saving for Low ISR
           MOVFF   BSR_TEMP, BSR       ; restore bankselect register
@@ -308,6 +343,7 @@ MAIN_PROG CODE                        ; let linker place main program
 START
 	  call mcu_init
 	  ;call ssp_init
+	  call usart_init
 
     
 	  bsf Z80_BUSACK_TRIS, Z80_BUSACK_PIN
@@ -315,11 +351,13 @@ START
 	  bsf Z80_BUSREQ_LAT, Z80_BUSREQ_PIN
 	  bcf Z80_BUSREQ_TRIS, Z80_BUSREQ_PIN
     
-	  bsf Z80_WAIT_LAT, Z80_WAIT_PIN
-	  bcf Z80_WAIT_TRIS, Z80_WAIT_PIN
+	  ;bsf Z80_WAIT_LAT, Z80_WAIT_PIN
+	  bsf Z80_WAIT_TRIS, Z80_WAIT_PIN
+	  
+	  bsf Z80_IOREQ_TRIS, Z80_IOREQ_PIN
 
-          bcf TRISB, RB3
-	  bcf LATB, RB3
+	  bcf Z80_WAITRES_TRIS, Z80_WAITRES_PIN
+	  bsf Z80_WAITRES_LAT, Z80_WAITRES_PIN
 	  
 	  bcf Z80_RESET_TRIS, Z80_RESET_PIN
 	  bcf Z80_RESET_LAT, Z80_RESET_PIN
@@ -386,30 +424,40 @@ START
 	  
 	  
 	  SRAM_WRITE 0x0000, 0x3e
-	  SRAM_WRITE 0x0001, 0x02
+	  SRAM_WRITE 0x0001, 0x65
 	  SRAM_WRITE 0x0002, 0xd3
-	  SRAM_WRITE 0x0003, 0x00
+	  SRAM_WRITE 0x0003, 0x01
 	  SRAM_WRITE 0x0004, 0xc3
-	  SRAM_WRITE 0x0005, 0x04
+	  SRAM_WRITE 0x0005, 0x00
 	  SRAM_WRITE 0x0006, 0x00
 	  SRAM_WRITE 0x0007, 0x76
 	  
+	  movlw 'X'
+	  call usart_putchar
+	  
 	  call release_control
 	  call z80_reset
+	  
+	  bcf INTCON2, INTEDG0
+	  bcf INTCON, INT0IF
+	  bsf INTCON, INT0IE
+    
+	  ;disable priority interrupts
+	  bcf RCON, IPEN
+	  
+	  bsf INTCON, 6 ; PEIE
+	  bsf INTCON, 7 ; GIE
+	  
+	  ;bcf Z80_WAITRES_TRIS, Z80_WAITRES_PIN
+	  ;bsf Z80_WAITRES_LAT, Z80_WAITRES_PIN
+	  
 	  ;bcf LATB, RB3
-	  nop
-	  ;nop
-	  bsf LATB, RB3
 	  ;nop
 	  ;nop
-	  ;nop
-	  ;nop
+	  ;bsf Z80_WAITRES_LAT, Z80_WAITRES_PIN
 	  ;bsf LATB, RB3
 	  
-;	  movlw .10
-;	  call delay_millis
-;;	  
-;	  bsf LATB, RB3
+
 	  
 blink_loop:    
 	  ;bsf LATB, RB3
@@ -693,12 +741,6 @@ z80_reset:
     
     movlw .200
     call delay_millis
-    ;movlw .255
-    ;call delay_millis
-    ;movlw .255
-    ;call delay_millis
-    ;movlw .255
-    ;call delay_millis
     
     bsf Z80_RESET_LAT, Z80_RESET_PIN
     ;bsf Z80_RESET_TRIS, Z80_RESET_PIN
