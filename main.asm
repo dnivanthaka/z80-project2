@@ -194,6 +194,7 @@ EXTERN databus_init
 EXTERN databusmode_set
 EXTERN databus_write
 EXTERN databus_read
+EXTERN databus_clear
 	    
 EXTERN usart_init
 EXTERN usart_putchar
@@ -300,8 +301,8 @@ HIGH_ISR
 	  movlw 'I'
 	  call usart_putchar
 	  
-	  call databus_read
-	  call usart_hex2ascii
+	  ;call databus_read
+	  ;call usart_hex2ascii
 	  
 	  ;call addressbus_read
 	  ;call usart_hex2ascii
@@ -311,7 +312,9 @@ HIGH_ISR
 	  nop
 	  nop
 	  nop
+	  nop
 	  bsf Z80_WAITRES_LAT, Z80_WAITRES_PIN
+	  nop
 	  
 	  bcf INTCON, INT0IF
 
@@ -429,7 +432,7 @@ START
 	  
 	  
 	  SRAM_WRITE 0x0000, 0x3e
-	  SRAM_WRITE 0x0001, 0x65
+	  SRAM_WRITE 0x0001, 0xf0
 	  SRAM_WRITE 0x0002, 0xd3
 	  SRAM_WRITE 0x0003, 0x01
 	  SRAM_WRITE 0x0004, 0x00
@@ -468,41 +471,9 @@ START
 	  
 	  bsf INTCON, 6 ; PEIE
 	  bsf INTCON, 7 ; GIE
-	  
-	  ;bcf Z80_WAITRES_TRIS, Z80_WAITRES_PIN
-	  ;bsf Z80_WAITRES_LAT, Z80_WAITRES_PIN
-	  
-	  ;bcf LATB, RB3
-	  ;nop
-	  ;nop
-	  ;bsf Z80_WAITRES_LAT, Z80_WAITRES_PIN
-	  ;bsf LATB, RB3
-	  
 
 	  
 blink_loop:    
-	  ;bsf LATB, RB3
-	  
-;	  movlw 0x00
-;	  movwf spi_sram_addr
-;	  
-;	  movlw 0x00
-;	  movwf spi_sram_addr+1
-;	  
-;	  movlw 0x00
-;	  movwf spi_sram_addr+2
-;	  
-;	  call spi_sram_read_data
-;	  
-;	  xorlw 0x56
-;	  btfss STATUS, Z
-	  ;call databus_read
-	  ;SRAM_READ 0x0001
-	  ;xorlw 0xd3
-	  ;btfss STATUS, Z
-	  ;bsf TRISD, 0
-	  ;btfsc PORTD, 0
-	  ;bra blink_loop
 	  
 	  _DI_
 	  bcf Z80_BUSREQ_LAT, Z80_BUSREQ_PIN
@@ -511,26 +482,9 @@ _wait_busack:
 	  btfsc Z80_BUSACK_PORT, Z80_BUSACK_PIN
 	  bra _wait_busack
 	  
-	  ;control bus
-;	  bsf Z80_IOREQ_LAT, Z80_IOREQ_PIN
-;	  bcf Z80_IOREQ_TRIS, Z80_IOREQ_PIN
-;	  
-;	  bsf SRAM_CS_LAT, SRAM_CS_PIN
-;	  bcf SRAM_CS_TRIS, SRAM_CS_PIN
-;	  
-;	  bsf SRAM_OE_LAT, SRAM_OE_PIN
-;	  bcf SRAM_OE_TRIS, SRAM_OE_PIN
-;	  
-;	  bsf SRAM_WE_LAT, SRAM_WE_PIN
-;	  bcf SRAM_WE_TRIS, SRAM_WE_PIN
-;	  
-;	  movlw 0x00
-;	  call addressbusmode_set
-;    
-;	  movlw 0x00
-;	  call databusmode_set
-	  
 	  call gain_control
+	  
+	  ;--------------------------------------------
 	  
 	  movlw 'Y'
 	  call usart_putchar
@@ -549,20 +503,23 @@ _wait_busack:
 	  movlw .255
 	  call delay_millis
 	  
-	  movlw 0x00
-	  movwf ds12887_val
+	  call ds12887_write
 	  
-	  call ds12887_read
+;	  movlw 0x00
+;	  movwf ds12887_val
+;	  
+;	  call ds12887_read
+;	  
+;	  movlw .255
+;	  call delay_millis
+;	  movlw .255
+;	  call delay_millis
+;	  movlw .255
+;	  call delay_millis
 	  
-	  movlw .255
-	  call delay_millis
-	  movlw .255
-	  call delay_millis
-	  movlw .255
-	  call delay_millis
+	  ;----------------------------------------------------
 	  
 	  call release_control
-	  
 	  
 	  bsf Z80_BUSREQ_LAT, Z80_BUSREQ_PIN
 	  
@@ -813,6 +770,7 @@ release_control:
     bsf SRAM_CS_TRIS, SRAM_CS_PIN
     bsf SRAM_OE_TRIS, SRAM_OE_PIN
     bsf SRAM_WE_TRIS, SRAM_WE_PIN
+    bsf Z80_IOREQ_TRIS, Z80_IOREQ_PIN
     
     movlw 0x01
     call addressbusmode_set
@@ -894,6 +852,49 @@ _wr_sram_from_rom:
     xorlw 0x04
     bnz _wr_sram_from_rom
     return
+    
+;-------------------------------------------------------
+    
+ds12887_write:
+    ;ds12887_reg and ds12887_val should be set
+    ;set latch AS pin as high
+    clrf addressbus_val+1
+    bsf addressbus_val+1, 0
+    movlw 0x02                   ;address of ds12887
+    movwf addressbus_val
+    call addressbus_write
+    
+    nop
+    
+    clrf addressbus_val+1
+    bcf addressbus_val+1, 0
+    movlw 0x02                   ;address of ds12887
+    movwf addressbus_val
+    
+    bcf Z80_IOREQ_LAT, Z80_IOREQ_PIN
+    
+    ;register
+    movlw 0x09
+    call databus_write
+    call addressbus_write
+    
+    nop
+    nop
+    nop
+    
+    bcf SRAM_WE_LAT, SRAM_WE_PIN
+    nop
+    nop
+    nop
+    nop
+    
+    movlw .63
+    call databus_write
+    
+    bsf SRAM_WE_LAT, SRAM_WE_PIN
+    bsf Z80_IOREQ_LAT, Z80_IOREQ_PIN
+    
+    return    
 ;-------------------------------------------------------
     
 ds12887_read:
@@ -901,21 +902,55 @@ ds12887_read:
     
     
     ;set latch AS pin as high
-    movlw 0x00                   ;address of latch
+    clrf addressbus_val+1
+    bsf addressbus_val+1, 0
+    movlw 0x02                   ;address of ds12887
+    movwf addressbus_val
     call addressbus_write
     
-    movf ds12887_val, w
-    call databus_write
+    nop
+    ;nop
+    
+    clrf addressbus_val+1
+    bcf addressbus_val+1, 0
+    movlw 0x02                   ;address of ds12887
+    movwf addressbus_val
     
     bcf Z80_IOREQ_LAT, Z80_IOREQ_PIN
     
-    bcf SRAM_WE_LAT, SRAM_WE_PIN
-    ;movlw 0x04
+    ;register
+    movlw 0x09
+    call databus_write
+    call addressbus_write
+    
+    ;movlw 0xf0
+    ;movlw 0x02
+    ;call databus_write
     
     nop
     nop
-
-    bsf SRAM_WE_LAT, SRAM_WE_PIN
+    nop
+    ;nop
+    
+    ;call databus_clear
+    
+    bcf SRAM_OE_LAT, SRAM_OE_PIN
+    
+    ;bcf SRAM_OE_LAT, SRAM_OE_PIN
+    
+    ;call databus_clear
+    nop
+    nop
+    nop
+    nop
+    ;nop
+    ;nop
+    
+    movlw 0x01
+    call databusmode_set
+    call databus_read
+    
+    bsf SRAM_OE_LAT, SRAM_OE_PIN
     
     ;select the rtc
     ;movlw 0x02
@@ -924,6 +959,15 @@ ds12887_read:
     ;bring AS pin low
     
     bsf Z80_IOREQ_LAT, Z80_IOREQ_PIN
+    
+    call usart_hex2ascii
+    
+    movlw 0x00
+    call databusmode_set
+    
+    ;clrf addressbus_val+1
+    ;clrf addressbus_val
+    ;call addressbus_write
     
     return
           END

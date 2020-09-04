@@ -100,11 +100,17 @@ databus_read:
     movf db_temp, w
     
     return
-;----------------------------------------------------------------------
+;----------------------------------------------------------------------    
+databus_clear:
+    clrf LATD
+    return
+;----------------------------------------------------------------------    
+
     GLOBAL databus_init
     GLOBAL databusmode_set
     GLOBAL databus_write
     GLOBAL databus_read
+    GLOBAL databus_clear
     
 	END
 
