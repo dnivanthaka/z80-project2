@@ -4,8 +4,13 @@
     <open-files xmlns="http://www.netbeans.org/ns/projectui-open-files/2">
         <group>
             <file>file:/home/dinusha/MPLABXProjects/Z80Project2.X/main.asm</file>
+            <file>file:/home/dinusha/MPLABXProjects/Z80Project2.X/usart_hw.asm</file>
+            <file>file:/home/dinusha/MPLABXProjects/Z80Project2.X/usart_sw.asm</file>
             <file>file:/home/dinusha/MPLABXProjects/Z80Project2.X/delays.asm</file>
+            <file>file:/home/dinusha/MPLABXProjects/Z80Project2.X/rom.asm</file>
             <file>file:/home/dinusha/MPLABXProjects/Z80Project2.X/ssp_hw.asm</file>
+            <file>file:/home/dinusha/MPLABXProjects/Z80Project2.X/addressbus.asm</file>
+            <file>file:/home/dinusha/MPLABXProjects/Z80Project2.X/databus.asm</file>
         </group>
     </open-files>
 </project-private>

@@ -202,6 +202,8 @@ EXTERN usart_getchar
 EXTERN usart_newline
 EXTERN usart_getmessages
 EXTERN usart_hex2ascii
+EXTERN usart_readline
+EXTERN usart_rxline
 	    
 EXTERN rom_data
 	    
@@ -252,6 +254,7 @@ sram_temp     RES 1
 ds12887_reg   RES 1
 ds12887_val   RES 1
 
+serial_status RES 1   
 ;------------------------------------------------------------------------------
 ; EEPROM INITIALIZATION
 ;
@@ -298,6 +301,9 @@ HIGH_ISR
 
           ; Insert High Priority ISR Here
 	  
+	  btfsc PIR1, RC1IF
+	  bra usart_int
+	  
 	  movlw 'I'
 	  call usart_putchar
 	  
@@ -317,7 +323,16 @@ HIGH_ISR
 	  nop
 	  
 	  bcf INTCON, INT0IF
-
+	  
+	  bra int_end
+	  
+usart_int:
+	bsf serial_status, 0
+	call usart_getchar
+    
+	bcf PIR1, RC1IF
+	  
+int_end:
           RETFIE  FAST
 
 ;------------------------------------------------------------------------------
@@ -376,6 +391,8 @@ START
 	  ;call sram_deselect
 	  call sram_init
 	  
+	  clrf serial_status
+	  
 	  ;bsf LATB,  RB3
 	  ;bcf TRISB, RB3
 	  
@@ -431,33 +448,49 @@ START
 ;	  SRAM_WRITE 0x0002, 0x00
 	  
 	  
-	  SRAM_WRITE 0x0000, 0x3e
-	  SRAM_WRITE 0x0001, 0xf0
-	  SRAM_WRITE 0x0002, 0xd3
-	  SRAM_WRITE 0x0003, 0x01
-	  SRAM_WRITE 0x0004, 0x00
-	  SRAM_WRITE 0x0005, 0x00
-	  SRAM_WRITE 0x0006, 0x00
-	  SRAM_WRITE 0x0007, 0x00
-	  SRAM_WRITE 0x0008, 0x00
-	  SRAM_WRITE 0x0009, 0x00
-	  SRAM_WRITE 0x000A, 0x00
-	  SRAM_WRITE 0x000B, 0x00
-	  SRAM_WRITE 0x000C, 0x00
-	  SRAM_WRITE 0x000D, 0x00
-	  SRAM_WRITE 0x000E, 0x00
-	  SRAM_WRITE 0x000F, 0x00
-	  SRAM_WRITE 0x0010, 0x00
-	  SRAM_WRITE 0x0011, 0x00
-	  SRAM_WRITE 0x0012, 0x00
-	  SRAM_WRITE 0x0013, 0x00
-	  SRAM_WRITE 0x0014, 0xc3
-	  SRAM_WRITE 0x0015, 0x14
-	  SRAM_WRITE 0x0016, 0x00
-	  SRAM_WRITE 0x0017, 0x76
+;	  SRAM_WRITE 0x0000, 0x3e
+;	  SRAM_WRITE 0x0001, 0x80
+;	  SRAM_WRITE 0x0002, 0xd3
+;	  SRAM_WRITE 0x0003, 0x00
+;	  SRAM_WRITE 0x0004, 0x00
+;	  SRAM_WRITE 0x0005, 0x00
+;	  SRAM_WRITE 0x0006, 0x00
+;	  SRAM_WRITE 0x0007, 0x00
+;	  SRAM_WRITE 0x0008, 0x00
+;	  SRAM_WRITE 0x0009, 0x00
+;	  SRAM_WRITE 0x000A, 0x00
+;	  SRAM_WRITE 0x000B, 0x00
+;	  SRAM_WRITE 0x000C, 0x00
+;	  SRAM_WRITE 0x000D, 0x00
+;	  SRAM_WRITE 0x000E, 0x00
+;	  SRAM_WRITE 0x000F, 0x00
+;	  SRAM_WRITE 0x0010, 0x00
+;	  SRAM_WRITE 0x0011, 0x00
+;	  SRAM_WRITE 0x0012, 0x00
+;	  SRAM_WRITE 0x0013, 0x00
+;	  SRAM_WRITE 0x0014, 0xc3
+;	  SRAM_WRITE 0x0015, 0x14
+;	  SRAM_WRITE 0x0016, 0x00
+;	  SRAM_WRITE 0x0017, 0x76
 	  
-	  movlw 'X'
+	  call write_rom_to_sram
+	  
+mem_print_loop:
+	  movlw '0'
 	  call usart_putchar
+	  movlw 'x'
+	  call usart_putchar
+	  
+	  call sram_read
+	  call usart_hex2ascii
+	  movlw ' '
+	  call usart_putchar
+	  
+	  incfsz addressbus_val, f
+	  bra mem_print_loop
+	  
+	  ;movlw 'X'
+	  ;call usart_putchar
 	  
 	  call release_control
 	  call z80_reset
@@ -474,6 +507,9 @@ START
 
 	  
 blink_loop:    
+    
+	  btfss serial_status, 0
+	  bra blink_loop
 	  
 	  _DI_
 	  bcf Z80_BUSREQ_LAT, Z80_BUSREQ_PIN
@@ -485,33 +521,79 @@ _wait_busack:
 	  call gain_control
 	  
 	  ;--------------------------------------------
-	  
-	  movlw 'Y'
+conn_loop:
+	  call usart_newline
+	  movlw '>'
 	  call usart_putchar
 	  
-	  call usart_newline
+	  call usart_readline
 	  
-	  movlw 0xf0
-	  movwf ds12887_val
+	  ;movf usart_rxline, w
+	  ;call usart_putchar
+	  movf usart_rxline, w
+	  ;call usart_newline
+	  ;movlw 'X'
+	  ;call usart_putchar
+	  xorlw 'q'
+	  bz conn_end
+	  movf usart_rxline+16, w
+	  call usart_hex2ascii
+	  bra conn_loop
+conn_end:
+	  bcf serial_status, 0  
+	  ;call usart_newline
+	  
+	  ;clrf addressbus_val
+	  ;clrf addressbus_val+1
+	  
+;mem_print_loop:
+;	  movlw '0'
+;	  call usart_putchar
+;	  movlw 'x'
+;	  call usart_putchar
+;	  
+;	  call sram_read
+;	  call usart_hex2ascii
+;	  movlw ' '
+;	  call usart_putchar
+;	  
+;	  incfsz addressbus_val, f
+;	  bra mem_print_loop
+	  
+	  movlw 0x00
+	  movwf ds12887_reg
 	  
 	  call ds12887_read
-	  
-	  movlw .255
-	  call delay_millis
-	  movlw .255
-	  call delay_millis
-	  movlw .255
-	  call delay_millis
-	  
-	  call ds12887_write
+	  call usart_hex2ascii
+;	  
+;	  movlw .255
+;	  call delay_millis
+;	  movlw .255
+;	  call delay_millis
+;	  movlw .255
+;	  call delay_millis
+;	  
+;	  movlw 0x09
+;	  movwf ds12887_reg
+;	  
+;	  movlw 0x63
+;	  movwf ds12887_val
+;	  
+;	  call ds12887_write
 	  
 ;	  movlw 0x00
 ;	  movwf ds12887_val
 ;	  
 ;	  call ds12887_read
 ;	  
-;	  movlw .255
-;	  call delay_millis
+	  movlw .255
+	  call delay_millis
+	  movlw .255
+	  call delay_millis
+	  movlw .255
+	  call delay_millis
+	  movlw .255
+	  call delay_millis
 ;	  movlw .255
 ;	  call delay_millis
 ;	  movlw .255
@@ -733,7 +815,7 @@ sram_write:
     SRAM_WE_LO
     
     nop
-    ;nop
+    nop
     
     SRAM_WE_HI
     SRAM_CS_HI
@@ -751,13 +833,13 @@ sram_deselect:
 sram_init:
     ;sram pins
     
-    bcf SRAM_CS_LAT, SRAM_CS_PIN
+    bsf SRAM_CS_LAT, SRAM_CS_PIN
     bcf SRAM_CS_TRIS, SRAM_CS_PIN
     
-    bcf SRAM_OE_LAT, SRAM_OE_PIN
+    bsf SRAM_OE_LAT, SRAM_OE_PIN
     bcf SRAM_OE_TRIS, SRAM_OE_PIN
     
-    bcf SRAM_WE_LAT, SRAM_WE_PIN
+    bsf SRAM_WE_LAT, SRAM_WE_PIN
     bcf SRAM_WE_TRIS, SRAM_WE_PIN
     
     call sram_deselect
@@ -840,7 +922,7 @@ _wr_sram_from_rom:
     TBLRD*+
     nop
     nop
-    ;nop
+    nop
     movf TABLAT, w
     call sram_write ;call to write sram, even
     incfsz addressbus_val, f
@@ -849,7 +931,7 @@ _wr_sram_from_rom:
     incf addressbus_val+1, f
     
     movf addressbus_val+1, w
-    xorlw 0x04
+    xorlw 0x02
     bnz _wr_sram_from_rom
     return
     
@@ -874,7 +956,7 @@ ds12887_write:
     bcf Z80_IOREQ_LAT, Z80_IOREQ_PIN
     
     ;register
-    movlw 0x09
+    movf ds12887_reg, w
     call databus_write
     call addressbus_write
     
@@ -888,7 +970,7 @@ ds12887_write:
     nop
     nop
     
-    movlw .63
+    movf ds12887_val, w
     call databus_write
     
     bsf SRAM_WE_LAT, SRAM_WE_PIN
@@ -899,9 +981,20 @@ ds12887_write:
     
 ds12887_read:
     ;ds12887_reg and ds12887_val should be set
-    
-    
     ;set latch AS pin as high
+    bsf SRAM_OE_LAT, SRAM_OE_PIN
+    bsf Z80_IOREQ_LAT, Z80_IOREQ_PIN
+    
+    clrf addressbus_val+1
+    bcf addressbus_val+1, 0
+    movlw 0x02                   ;address of ds12887
+    movwf addressbus_val
+    call addressbus_write
+    
+    nop
+    nop
+    nop
+    
     clrf addressbus_val+1
     bsf addressbus_val+1, 0
     movlw 0x02                   ;address of ds12887
@@ -909,7 +1002,11 @@ ds12887_read:
     call addressbus_write
     
     nop
-    ;nop
+    nop
+    nop
+    nop
+    nop
+    
     
     clrf addressbus_val+1
     bcf addressbus_val+1, 0
@@ -919,57 +1016,45 @@ ds12887_read:
     bcf Z80_IOREQ_LAT, Z80_IOREQ_PIN
     
     ;register
-    movlw 0x09
+    movf ds12887_reg, w
     call databus_write
     call addressbus_write
     
-    ;movlw 0xf0
-    ;movlw 0x02
-    ;call databus_write
-    
     nop
     nop
     nop
-    ;nop
-    
-    ;call databus_clear
+    nop
+    nop
     
     bcf SRAM_OE_LAT, SRAM_OE_PIN
     
-    ;bcf SRAM_OE_LAT, SRAM_OE_PIN
-    
-    ;call databus_clear
-    nop
-    nop
-    nop
-    nop
-    ;nop
-    ;nop
-    
     movlw 0x01
     call databusmode_set
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+
     call databus_read
     
     bsf SRAM_OE_LAT, SRAM_OE_PIN
     
-    ;select the rtc
-    ;movlw 0x02
-    ;call addressbus_write
-    
-    ;bring AS pin low
-    
     bsf Z80_IOREQ_LAT, Z80_IOREQ_PIN
     
-    call usart_hex2ascii
+    movwf ds12887_val
+    ;call usart_hex2ascii
     
     movlw 0x00
     call databusmode_set
     
-    ;clrf addressbus_val+1
-    ;clrf addressbus_val
-    ;call addressbus_write
+    movf ds12887_val, w
     
     return
+;--------------------------------------------------------------
           END
 
 

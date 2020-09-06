@@ -3,8 +3,11 @@
 	
     UDATA
 	
-	temp RES 1
+	temp  RES 1
 	temp2 RES 1
+	temp3 RES 1
+	usart_rxline RES 17 ;last byte contains the length
+	rxcount RES 1
  
     CODE
 usart_init:
@@ -114,14 +117,58 @@ usart_hex2ascii:
     call usart_hex2ascii_nb
     
     return
-	
+    
+;--------------------------------------------------------------------
+usart_readline:
+    ;movlw .15
+    clrf FSR0H
+    clrf rxcount
+    movlw low usart_rxline
+    movwf FSR0L
+    movlw high usart_rxline
+    movwf FSR0H
+    
+readline_loop:    
+    call usart_getchar
+    movwf temp3
+    
+    ;movf temp3, w
+    xorlw '\n'
+    bz readline_done
+    movf temp3, w
+    xorlw '\r'
+    bz readline_done
+    movf temp3, w
+    xorlw '\0'
+    bz readline_done
+    
+    ;echo to terminal
+    movf temp3, w
+    call usart_putchar
+    
+    movf rxcount, w
+    addwf FSR0L
+    movf temp3, w
+    movwf INDF0
+    incf rxcount, f
+    movf rxcount, w
+    xorlw .16
+    bnz readline_loop
+    
+readline_done:
+    movf rxcount, w
+    movwf usart_rxline+16
+    
+    return
 ;--------------------------------------------------------------------
 GLOBAL usart_init
 GLOBAL usart_putchar
 GLOBAL usart_getchar
 GLOBAL usart_newline
 GLOBAL usart_getmessages
-GLOBAL usart_hex2ascii	
+GLOBAL usart_hex2ascii
+GLOBAL usart_readline
+GLOBAL usart_rxline
 	
     END
 
