@@ -1,5 +1,8 @@
      LIST      P=PIC18F46K22          ; list directive to define processor
-     #INCLUDE <p18f46k22.inc>	
+     #INCLUDE <p18f46k22.inc>
+     
+     #define _EI_ bsf INTCON, 7 ; GIE
+    #define _DI_ bcf INTCON, 7 ; GIE 
 	
     UDATA
 	
@@ -121,6 +124,7 @@ usart_hex2ascii:
 ;--------------------------------------------------------------------
 usart_readline:
     ;movlw .15
+    _DI_
     clrf FSR0H
     clrf rxcount
     movlw low usart_rxline
@@ -135,9 +139,11 @@ readline_loop:
     ;movf temp3, w
     xorlw '\n'
     bz readline_done
+    
     movf temp3, w
     xorlw '\r'
     bz readline_done
+    
     movf temp3, w
     xorlw '\0'
     bz readline_done
@@ -146,11 +152,13 @@ readline_loop:
     movf temp3, w
     call usart_putchar
     
-    movf rxcount, w
-    addwf FSR0L
+    ;movf rxcount, w
+    ;addwf FSR0L, f
+    
     movf temp3, w
     movwf INDF0
     incf rxcount, f
+    incf FSR0L, f
     movf rxcount, w
     xorlw .16
     bnz readline_loop
@@ -158,7 +166,18 @@ readline_loop:
 readline_done:
     movf rxcount, w
     movwf usart_rxline+16
+    _EI_
     
+    return
+;--------------------------------------------------------------------
+;TODO need to add bounds checking
+usart_ascii2hex:
+    movwf temp3
+    movlw '0'
+    subwf temp3, w
+    ;bz ascii2hex_done
+    
+ascii2hex_done:    
     return
 ;--------------------------------------------------------------------
 GLOBAL usart_init
@@ -167,6 +186,7 @@ GLOBAL usart_getchar
 GLOBAL usart_newline
 GLOBAL usart_getmessages
 GLOBAL usart_hex2ascii
+GLOBAL usart_ascii2hex
 GLOBAL usart_readline
 GLOBAL usart_rxline
 	

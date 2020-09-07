@@ -202,6 +202,7 @@ EXTERN usart_getchar
 EXTERN usart_newline
 EXTERN usart_getmessages
 EXTERN usart_hex2ascii
+EXTERN usart_ascii2hex
 EXTERN usart_readline
 EXTERN usart_rxline
 	    
@@ -254,7 +255,8 @@ sram_temp     RES 1
 ds12887_reg   RES 1
 ds12887_val   RES 1
 
-serial_status RES 1   
+serial_status RES 1 
+temp1         RES 2
 ;------------------------------------------------------------------------------
 ; EEPROM INITIALIZATION
 ;
@@ -327,9 +329,11 @@ HIGH_ISR
 	  bra int_end
 	  
 usart_int:
+	btfsc serial_status, 0
+	bra usart_int_end
 	bsf serial_status, 0
 	call usart_getchar
-    
+usart_int_end:    
 	bcf PIR1, RC1IF
 	  
 int_end:
@@ -475,19 +479,24 @@ START
 	  
 	  call write_rom_to_sram
 	  
-mem_print_loop:
-	  movlw '0'
-	  call usart_putchar
-	  movlw 'x'
-	  call usart_putchar
+	  clrf addressbus_val
+	  clrf addressbus_val+1
 	  
-	  call sram_read
-	  call usart_hex2ascii
-	  movlw ' '
-	  call usart_putchar
-	  
-	  incfsz addressbus_val, f
-	  bra mem_print_loop
+;mem_print_loop:
+;	  movlw '0'
+;	  call usart_putchar
+;	  movlw 'x'
+;	  call usart_putchar
+;	  
+;	  call sram_read
+;	  call usart_hex2ascii
+;	  movlw ' '
+;	  call usart_putchar
+;	  
+;	  incfsz addressbus_val, f
+;	  bra mem_print_loop
+	  call mem_dump
+	  call usart_newline
 	  
 	  ;movlw 'X'
 	  ;call usart_putchar
@@ -525,6 +534,8 @@ conn_loop:
 	  call usart_newline
 	  movlw '>'
 	  call usart_putchar
+	  movlw ' '
+	  call usart_putchar
 	  
 	  call usart_readline
 	  
@@ -537,7 +548,50 @@ conn_loop:
 	  xorlw 'q'
 	  bz conn_end
 	  movf usart_rxline+16, w
-	  call usart_hex2ascii
+	  ;call usart_hex2ascii
+	  xorlw 0x04
+	  bz mem_dump1
+	  bra conn_loop
+	  
+mem_dump1:
+	  clrf addressbus_val
+	  clrf addressbus_val+1
+	  
+	  movlw ' '
+	  call usart_putchar
+	  
+	  movf usart_rxline, w
+	  call usart_ascii2hex
+	  movwf temp1
+	  
+	  movf usart_rxline+1, w
+	  call usart_ascii2hex
+	  movwf temp1+1
+	  
+	  swapf temp1, f
+	  movf temp1+1, w
+	  iorwf temp1, w
+	  movwf addressbus_val+1
+	  ;call usart_hex2ascii
+	  
+	  movf usart_rxline+2, w
+	  call usart_ascii2hex
+	  movwf temp1
+	  
+	  movf usart_rxline+3, w
+	  call usart_ascii2hex
+	  movwf temp1+1
+	  
+	  swapf temp1, f
+	  movf temp1+1, w
+	  iorwf temp1, w
+	  movwf addressbus_val
+	  ;call usart_hex2ascii
+	  
+	  call usart_newline
+	  call mem_dump
+	  call usart_newline
+	  
 	  bra conn_loop
 conn_end:
 	  bcf serial_status, 0  
@@ -1053,6 +1107,22 @@ ds12887_read:
     
     movf ds12887_val, w
     
+    return
+;--------------------------------------------------------------
+mem_dump:
+mem_print_loop:
+      movlw '0'
+      call usart_putchar
+      movlw 'x'
+      call usart_putchar
+
+      call sram_read
+      call usart_hex2ascii
+      movlw ' '
+      call usart_putchar
+
+      incfsz addressbus_val, f
+      bra mem_print_loop
     return
 ;--------------------------------------------------------------
           END
