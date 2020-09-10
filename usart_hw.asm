@@ -59,19 +59,20 @@ usart_getchar:
     return
     
 ;--------------------------------------------------------------------
-;usart_putstr:
-;    movwf	FSR
-;    
-;outmessage:
-;    movf FSR, w
-;    incf FSR, f
-;    call getmessages
-;    xorlw 0
-;    btfsc STATUS, Z
-;    return
-;    call TXPoll
-;    goto outmessage
-;    return
+usart_putstr:
+    movwf FSR0L
+    clrf FSR0H
+    
+outmessage:
+    movf FSR0L, w
+    incf FSR0L, f
+    call usart_getmessages
+    xorlw 0
+    btfsc STATUS, Z
+    return
+    call usart_putchar
+    goto outmessage
+    return
 ;--------------------------------------------------------------------    
 usart_newline:
     movlw 0x0D
@@ -182,6 +183,7 @@ ascii2hex_done:
 ;--------------------------------------------------------------------
 GLOBAL usart_init
 GLOBAL usart_putchar
+GLOBAL usart_putstr
 GLOBAL usart_getchar
 GLOBAL usart_newline
 GLOBAL usart_getmessages

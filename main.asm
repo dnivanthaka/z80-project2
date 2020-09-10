@@ -116,11 +116,13 @@
  
 #define         SRAM_OE_PIN          0
 #define         SRAM_OE_LAT          LATE
-#define         SRAM_OE_TRIS         TRISE 
+#define         SRAM_OE_TRIS         TRISE
+#define         SRAM_OE_PORT         PORTE   
  
 #define         SRAM_WE_PIN          1
 #define         SRAM_WE_LAT          LATE
-#define         SRAM_WE_TRIS         TRISE 
+#define         SRAM_WE_TRIS         TRISE
+#define         SRAM_WE_PORT         PORTE 
   
 #define		Z80_RESET_PIN        1
 #define		Z80_RESET_LAT        LATC
@@ -151,7 +153,24 @@
 #define		Z80_WAITRES_PORT     PORTB  
 
 #define _EI_ bsf INTCON, 7 ; GIE
-#define _DI_ bcf INTCON, 7 ; GIE  
+#define _DI_ bcf INTCON, 7 ; GIE
+
+  
+#define DS12887SECS 0x00
+#define DS12887MINS 0x02
+#define DS12887HRS  0x04
+#define DS12887DATE 0x07
+#define DS12887MNTH 0x08
+#define DS12887YEAR 0x09
+  
+#define DS12887REGA 0x0A
+#define DS12887REGB 0x0B
+#define DS12887REGC 0x0C
+#define DS12887REGD 0x0D 
+
+#define XFER_TXBIT 0x00                   ; send to z80
+#define XFER_RCBIT 0x01			  ; receiving from z80
+#define XFER_BUSY  0x02
   
 SRAM_CS_HI MACRO
 	    bsf     SRAM_CS_LAT, SRAM_CS_PIN
@@ -198,6 +217,7 @@ EXTERN databus_clear
 	    
 EXTERN usart_init
 EXTERN usart_putchar
+EXTERN usart_putstr
 EXTERN usart_getchar
 EXTERN usart_newline
 EXTERN usart_getmessages
@@ -257,6 +277,26 @@ ds12887_val   RES 1
 
 serial_status RES 1 
 temp1         RES 2
+temp2	      RES 1
+ones_count    RES 1
+tens_count    RES 1
+hunderds_count RES 1
+ 
+ds12887_regA RES 1
+ds12887_regB RES 1
+ds12887_regC RES 1
+ds12887_regD RES 1
+ 
+int_temp1    RES 1
+
+xfer_status  RES 1
+xfer_count   RES 1
+xfer_addr    RES 1
+ 
+comm_buffer RES 16
+comm_count  RES 1
+comm_idx    RES 1
+ 
 ;------------------------------------------------------------------------------
 ; EEPROM INITIALIZATION
 ;
@@ -300,30 +340,101 @@ ISRLV     CODE    0x0018
 ISRH      CODE                        ; let linker place high ISR routine
 
 HIGH_ISR  
-
+	  ; communication format: device id in address bus (4 higher bits), data byte 1, data byte 2 etc.
           ; Insert High Priority ISR Here
 	  
 	  btfsc PIR1, RC1IF
 	  bra usart_int
 	  
-	  movlw 'I'
-	  call usart_putchar
+	  ;bsf SRAM_WE_TRIS, SRAM_WE_PIN
+	  ;bsf SRAM_OE_TRIS, SRAM_OE_PIN
+	  
+	  btfsc   xfer_status, XFER_BUSY
+	  bra _pic_int_done
+	  
+	  btfsc   SRAM_WE_PORT, SRAM_WE_PIN
+	  bra _pic_read
+	  ;movlw 'I'
+	  ;call usart_putchar
 	  
 	  ;call databus_read
 	  ;call usart_hex2ascii
 	  
 	  ;call addressbus_read
 	  ;call usart_hex2ascii
+_pic_write:
+	  btfss xfer_status, XFER_RCBIT
+	  bra _pic_int_done
 	  
+	  ;clrf FSR0H
+	  
+	  movlw high comm_buffer
+	  movwf FSR0H
+	  
+	  movlw low comm_buffer
+	  movwf FSR0L
+	  
+	  movf comm_count, w
+	  addwf PLUSW0
+	  
+	  call databus_read
+	  movwf INDF0 
+	  	  
+	  call addressbus_read
+	  movwf xfer_addr
+	  
+	  incf xfer_count, f
+	  incf comm_count, f
+	  
+	  ;stop after 2 bytes received, activate busy mode by setting busy flag
+	  movlw .2
+	  xorwf comm_count, w
+	  bnz _pic_int_done
+	  
+	  bcf xfer_status, XFER_RCBIT
+	  bsf xfer_status, XFER_BUSY
+	  
+	  bra _int_hold_z80
+	  ;bra _pic_int_done                   ; keep the z80 on hold until we procees the request
+_pic_read:
+	  btfss xfer_status, XFER_TXBIT
+	  bra _pic_int_done
+	  
+	  movlw high comm_buffer
+	  movwf FSR0H
+	  
+    	  movlw low comm_buffer
+	  movwf FSR0L
+	  
+	  movf comm_count, w
+	  addwf PLUSW0, f
+;	  
+	  movlw 0x00
+	  call databusmode_set
+;	  
+	  movf INDF0, w
+	  call databus_write
+    
+	  bcf xfer_status, XFER_TXBIT
+	  incf xfer_count, f
+	  decfsz comm_count, f
+	  bsf xfer_status, XFER_TXBIT            ;reset the mode to read mode after we send bytes
+	  btfss xfer_status, XFER_TXBIT
+	  bsf xfer_status, XFER_RCBIT
+	  btfss xfer_status, XFER_TXBIT
+	  clrf xfer_count
+	  
+	  bcf Z80_BUSREQ_LAT, Z80_BUSREQ_PIN
+_pic_int_done:	  
 	  ;Reset latch
 	  bcf Z80_WAITRES_LAT, Z80_WAITRES_PIN
-	  nop
-	  nop
-	  nop
-	  nop
+	  movlw 0x01
+	  call databusmode_set
 	  bsf Z80_WAITRES_LAT, Z80_WAITRES_PIN
-	  nop
-	  
+	  bsf Z80_BUSREQ_LAT, Z80_BUSREQ_PIN
+	  ;nop
+
+_int_hold_z80:	  
 	  bcf INTCON, INT0IF
 	  
 	  bra int_end
@@ -395,7 +506,11 @@ START
 	  ;call sram_deselect
 	  call sram_init
 	  
+	  call ds12887_init
+	  
 	  clrf serial_status
+	  clrf comm_idx
+	  clrf xfer_status
 	  
 	  ;bsf LATB,  RB3
 	  ;bcf TRISB, RB3
@@ -498,6 +613,9 @@ START
 	  call mem_dump
 	  call usart_newline
 	  
+;	  movlw 0x00
+;	  call usart_putstr
+	  
 	  ;movlw 'X'
 	  ;call usart_putchar
 	  
@@ -515,10 +633,12 @@ START
 	  bsf INTCON, 7 ; GIE
 
 	  
-blink_loop:    
+work_loop:  
+	  btfsc xfer_status, XFER_BUSY
+	  call process_request
     
 	  btfss serial_status, 0
-	  bra blink_loop
+	  bra work_loop
 	  
 	  _DI_
 	  bcf Z80_BUSREQ_LAT, Z80_BUSREQ_PIN
@@ -530,6 +650,22 @@ _wait_busack:
 	  call gain_control
 	  
 	  ;--------------------------------------------
+    
+	  ;movlw .59
+	  ;call bin2bcd
+	  ;call bcd2bin
+	  ;call usart_hex2ascii
+	  ;print date and time here
+	  ;format dd-mm-yy H:i:S
+	  ;set BCD mode
+	  
+	  
+	  call usart_newline
+	  call print_timestamp
+	  call usart_newline
+	  ;call usart_newline
+	  
+	  ;-------------------------------------------------------
 conn_loop:
 	  call usart_newline
 	  movlw '>'
@@ -594,8 +730,17 @@ mem_dump1:
 	  
 	  bra conn_loop
 conn_end:
-	  bcf serial_status, 0  
-	  ;call usart_newline
+	  bcf serial_status, 0
+	  call usart_newline
+	  movlw 'B'
+	  call usart_putchar
+	  movlw 'Y'
+	  call usart_putchar
+	  movlw 'E'
+	  call usart_putchar
+	  call usart_newline
+	  
+	  clrf usart_rxline
 	  
 	  ;clrf addressbus_val
 	  ;clrf addressbus_val+1
@@ -614,11 +759,11 @@ conn_end:
 ;	  incfsz addressbus_val, f
 ;	  bra mem_print_loop
 	  
-	  movlw 0x00
-	  movwf ds12887_reg
+	  ;movlw 0x00
+	  ;movwf ds12887_reg
 	  
-	  call ds12887_read
-	  call usart_hex2ascii
+	  ;call ds12887_read
+	  ;call usart_hex2ascii
 ;	  
 ;	  movlw .255
 ;	  call delay_millis
@@ -678,7 +823,7 @@ _wait_busack2:
 	  call delay_millis
 	  
 
-          bra blink_loop                      ; loop program counter
+          bra work_loop                      ; loop program counter
 	  
 ;---------------------------------------------------
 	  
@@ -721,6 +866,7 @@ mcu_init:
     bcf CM1CON0, C1ON
     bcf CM2CON0, C2ON
     
+    movlb 0x0
     
     
     ;PWM setup
@@ -914,7 +1060,11 @@ release_control:
     movlw 0x01
     call databusmode_set
     
-    call sram_deselect
+    ;call sram_deselect
+        ;enable receive from z80
+    clrf xfer_count
+    clrf comm_count
+    bsf xfer_status, XFER_RCBIT
     
     return
 ;----------------------------------------------------------------
@@ -1109,22 +1259,192 @@ ds12887_read:
     
     return
 ;--------------------------------------------------------------
-mem_dump:
-mem_print_loop:
-      movlw '0'
-      call usart_putchar
-      movlw 'x'
-      call usart_putchar
+ds12887_init:
+    movlw DS12887REGB
+    movwf ds12887_reg
 
-      call sram_read
-      call usart_hex2ascii
-      movlw ' '
-      call usart_putchar
+    call ds12887_read
+    movwf ds12887_regB
 
-      incfsz addressbus_val, f
-      bra mem_print_loop
+    bsf ds12887_regB, 2
+
+    movf ds12887_regB, w
+    movwf ds12887_reg
+    call ds12887_write
     return
 ;--------------------------------------------------------------
+mem_dump:
+mem_print_loop:
+    movlw '0'
+    call usart_putchar
+    movlw 'x'
+    call usart_putchar
+
+    call sram_read
+    call usart_hex2ascii
+    movlw ' '
+    call usart_putchar
+
+    incfsz addressbus_val, f
+    bra mem_print_loop
+    return
+;--------------------------------------------------------------
+bin2bcd:
+    movwf temp2
+    clrf tens_count
+    clrf ones_count
+    
+    movlw .10
+    cpfsgt temp2   ;>
+    bra bin2bcd_ones_loop
+    
+bin2bcd_tens_loop:
+    incf tens_count, f
+    movlw .10
+    subwf temp2, f
+    bz done_b2bc
+    
+    movlw .10
+    cpfslt temp2   ;>
+    bra bin2bcd_tens_loop
+    
+bin2bcd_ones_loop:
+    incf ones_count, f
+    
+    decfsz temp2, f
+    bra bin2bcd_ones_loop
+    
+done_b2bc:
+    movf tens_count, w
+    movwf temp2
+    swapf temp2, f
+    
+    movf ones_count, w
+    iorwf temp2
+    
+    movf temp2, w
+    return
+;-------------------------------------------------------        
+bcd2bin:
+    movwf temp2
+    swapf temp2, w
+    andlw 0x0f
+    movwf tens_count
+    
+    movf temp2, w
+    andlw 0x0f
+    movwf ones_count
+
+    clrf temp2
+    
+    movf tens_count, w
+    xorlw 0x00
+    bz bc2bin_ones
+    
+bc2bin_tens:
+    movlw .10
+    addwf temp2, f
+    
+    decfsz tens_count, f
+    bra bc2bin_tens
+
+bc2bin_ones:    
+    movf ones_count, w
+    xorlw 0x00
+    bz bc2bin_done
+    
+bc2bin_ones_loop:
+    incf temp2
+    
+    decfsz ones_count, f
+    bra bc2bin_ones_loop
+    
+bc2bin_done:
+    movf temp2, w
+    
+    return
+;-------------------------------------------------------
+print_timestamp:
+    movlw DS12887DATE
+    movwf ds12887_reg
+
+    call ds12887_read
+    andlw 0x1f
+    call usart_hex2ascii
+
+    movlw '-'
+    call usart_putchar
+
+    movlw DS12887MNTH
+    movwf ds12887_reg
+
+    call ds12887_read
+    call usart_hex2ascii
+
+    movlw '-'
+    call usart_putchar
+
+    movlw DS12887YEAR
+    movwf ds12887_reg
+
+    call ds12887_read	  
+    call bin2bcd
+    call usart_hex2ascii
+
+    movlw ' '
+    call usart_putchar
+
+    movlw DS12887HRS
+    movwf ds12887_reg
+
+    call ds12887_read
+    call usart_hex2ascii
+
+    movlw ':'
+    call usart_putchar
+
+    movlw DS12887MINS
+    movwf ds12887_reg
+
+    call ds12887_read
+    call usart_hex2ascii
+
+    movlw ':'
+    call usart_putchar
+
+    movlw DS12887SECS
+    movwf ds12887_reg
+
+    call ds12887_read
+    call usart_hex2ascii
+    return
+;-------------------------------------------------------    
+process_request:
+    movlw 0xf0
+    xorwf xfer_addr, f
+    swapf xfer_addr
+    ;we ignore the address byte for now
+    
+    movlw 0x40
+    movwf comm_buffer
+    movwf comm_buffer+1
+    
+    movlw .1
+    movwf comm_count
+    clrf xfer_count
+    
+    bcf xfer_status, XFER_BUSY
+    bsf xfer_status, XFER_TXBIT
+    bcf xfer_status, XFER_RCBIT
+    
+    bcf Z80_WAITRES_LAT, Z80_WAITRES_PIN
+    movlw 0x01
+    call databusmode_set
+    bsf Z80_WAITRES_LAT, Z80_WAITRES_PIN
+    bsf Z80_BUSREQ_LAT, Z80_BUSREQ_PIN
+    
+    return
+;------------------------------------------------------- 
           END
 
 
