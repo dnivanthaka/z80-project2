@@ -150,7 +150,17 @@
 #define		Z80_WAITRES_PIN      3
 #define		Z80_WAITRES_LAT      LATB
 #define		Z80_WAITRES_TRIS     TRISB
-#define		Z80_WAITRES_PORT     PORTB  
+#define		Z80_WAITRES_PORT     PORTB
+  
+#define         SD_CS_PIN            1
+#define         SD_CS_LAT            LATB
+#define         SD_CS_TRIS           TRISB
+  
+#define         SD_TRIES_MAX         40
+#define		SD_VALID             0
+#define         SD_TIMEOUT           1
+#define         SD_TYPE              2
+
 
 #define _EI_ bsf INTCON, 7 ; GIE
 #define _DI_ bcf INTCON, 7 ; GIE
@@ -296,6 +306,11 @@ xfer_addr    RES 1
 comm_buffer RES 16
 comm_count  RES 1
 comm_idx    RES 1
+    
+sd_temp     RES 1
+sd_data     RES 6
+sd_tries_count RES 1
+sd_status   RES 1
  
 ;------------------------------------------------------------------------------
 ; EEPROM INITIALIZATION
@@ -349,10 +364,10 @@ HIGH_ISR
 	  ;bsf SRAM_WE_TRIS, SRAM_WE_PIN
 	  ;bsf SRAM_OE_TRIS, SRAM_OE_PIN
 	  
-	  btfsc   xfer_status, XFER_BUSY
+	  btfsc xfer_status, XFER_BUSY
 	  bra _pic_int_done
 	  
-	  btfsc   SRAM_WE_PORT, SRAM_WE_PIN
+	  btfsc SRAM_WE_PORT, SRAM_WE_PIN
 	  bra _pic_read
 	  ;movlw 'I'
 	  ;call usart_putchar
@@ -463,9 +478,6 @@ LOW_ISR
           MOVFF   BSR, BSR_TEMP       ; save bankselect register
 
           ; Insert Low Priority ISR Here
-	  
-	  movlw 'J'
-	  call usart_putchar
 
           ; Context Saving for Low ISR
           MOVFF   BSR_TEMP, BSR       ; restore bankselect register
@@ -500,15 +512,28 @@ START
 	  bcf Z80_RESET_TRIS, Z80_RESET_PIN
 	  bcf Z80_RESET_LAT, Z80_RESET_PIN
 	  
+	  ;sd card module cs
+	  bsf SD_CS_LAT, SD_CS_PIN
+	  bcf SD_CS_TRIS, SD_CS_PIN
+	  
 	  call databus_init
 	  call addressbus_init
     
 	  ;call sram_deselect
 	  call sram_init
+
 	  
-	  call ds12887_init
+	  ;call ds12887_init
 	  
 	  clrf serial_status
+	  
+	  bcf INTCON3, INT1IE
+	  bcf INTCON3, INT2IE
+	  
+	  call ssp_init
+	  
+	  call sd_init
+	  
 	  clrf comm_idx
 	  clrf xfer_status
 	  
@@ -619,6 +644,79 @@ START
 	  ;movlw 'X'
 	  ;call usart_putchar
 	  
+	  ;testing the 82c54 timer
+;	  _DI_
+;	  movlw 0x00
+;	  call databusmode_set
+;	  
+;	  movlw 0x00
+;	  call addressbusmode_set
+;	  
+;	  
+;	  bsf SRAM_WE_LAT, SRAM_WE_PIN
+;          bsf Z80_IOREQ_LAT, Z80_IOREQ_PIN
+;	  bcf Z80_IOREQ_TRIS, Z80_IOREQ_PIN
+;	  
+;	  movlw 0x32           ; address 0x02, device addr bits A0 and A1
+;	  movwf addressbus_val
+;	  clrf addressbus_val+1
+;	  
+;	  call addressbus_write
+;	  
+;	  movlw 0x30
+;	  call databus_write
+;	  
+;	  bcf Z80_IOREQ_LAT, Z80_IOREQ_PIN
+;	  bcf SRAM_WE_LAT, SRAM_WE_PIN
+;
+;	  nop
+;	  nop
+;	  nop
+;	  
+;	  ;goto $
+;	  
+;	  bsf SRAM_WE_LAT, SRAM_WE_PIN
+;          bsf Z80_IOREQ_LAT, Z80_IOREQ_PIN
+;	  
+;	  nop
+;	  
+;	  movlw 0x02           ; address 0x02, device addr bits A0 and A1
+;	  movwf addressbus_val
+;	  clrf addressbus_val+1
+;	  
+;	  call addressbus_write
+;	  
+;	  movlw .254		; low 8 bit
+;	  call databus_write
+;	  
+;          bcf Z80_IOREQ_LAT, Z80_IOREQ_PIN
+;	  bcf SRAM_WE_LAT, SRAM_WE_PIN
+;	  
+;	  nop
+;	  nop
+;	  nop
+;	  
+;	  bsf SRAM_WE_LAT, SRAM_WE_PIN
+;	  nop
+;	  bcf SRAM_WE_LAT, SRAM_WE_PIN
+;	  
+;	  movlw .254		; high 8 bit
+;	  call databus_write
+;	  
+;          bcf Z80_IOREQ_LAT, Z80_IOREQ_PIN
+;	  bcf SRAM_WE_LAT, SRAM_WE_PIN
+;	  
+;	  nop
+;	  nop
+;	  nop
+;	  
+;	  bsf SRAM_WE_LAT, SRAM_WE_PIN
+;          bsf Z80_IOREQ_LAT, Z80_IOREQ_PIN
+;	  
+;	  nop
+;	  bsf Z80_IOREQ_TRIS, Z80_IOREQ_PIN
+;	  
+;	  _EI_
 	  call release_control
 	  call z80_reset
 	  
@@ -631,7 +729,52 @@ START
 	  
 	  bsf INTCON, 6 ; PEIE
 	  bsf INTCON, 7 ; GIE
-
+	  
+	  ;enable ds12887 periodic interrupts
+;	  _DI_
+;	  movlw 0x0A
+;	  movwf ds12887_reg
+;
+;	  call ds12887_read
+;	  movwf int_temp1
+;	  
+;	  movf int_temp1, w
+;	  call usart_hex2ascii
+;	  
+;	  movlw 0x0f
+;	  iorwf int_temp1, w
+;	  movwf ds12887_val
+;	  
+;	  ;movlw 0x0A
+;	  ;movwf ds12887_reg
+;	  
+;	  call ds12887_write
+;	  
+;	  ;-------------------------
+;	  movlw 0x0A
+;	  movwf ds12887_reg
+;
+;	  call ds12887_read
+;	  movwf int_temp1
+;	  
+;	  movf int_temp1, w
+;	  call usart_hex2ascii 
+;	  
+;	  ;-------------------------
+;	  
+;	  movlw 0x0B
+;	  movwf ds12887_reg
+;	  
+;	  call ds12887_read
+;	  movwf int_temp1
+;	  
+;	  movlw 0x04
+;	  iorwf int_temp1, w
+;	  movwf ds12887_val
+;	  
+;	  call ds12887_write
+;	  
+;	  _EI_
 	  
 work_loop:  
 	  btfsc xfer_status, XFER_BUSY
@@ -661,8 +804,8 @@ _wait_busack:
 	  
 	  
 	  call usart_newline
-	  call print_timestamp
-	  call usart_newline
+	  ;call print_timestamp
+	  ;call usart_newline
 	  ;call usart_newline
 	  
 	  ;-------------------------------------------------------
@@ -826,7 +969,181 @@ _wait_busack2:
           bra work_loop                      ; loop program counter
 	  
 ;---------------------------------------------------
+sd_init:
+    movlw .1
+    call delay_millis
+    
+    clrf sd_status
+    clrf sd_tries_count
+    
+    bsf SD_CS_LAT, SD_CS_PIN
+    
+    movlw .10
+    movwf sd_temp
+    
+    ;send at least 10 bytes for initialization, min 74 clock pulses
+_sd_clk_pulse:
+    movlw 0xff
+    call ssp_write
+    
+    decfsz sd_temp, f
+    bra _sd_clk_pulse
+    
+    ;select sd
+    bcf SD_CS_LAT, SD_CS_PIN
+    
+    ;send CMD0, SPI mode enable
+;    movlw 0x40
+;    call ssp_write
+;    
+;    movlw 0x00
+;    call ssp_write
+;    movlw 0x00
+;    call ssp_write
+;    movlw 0x00
+;    call ssp_write
+;    movlw 0x00
+;    call ssp_write
+;    
+;    ;crc
+;    movlw 0x95
+;    call ssp_write
+    movlw 0x00
+    movwf sd_data
+    movwf sd_data+1
+    movwf sd_data+2
+    movwf sd_data+3
+    movwf sd_data+4
+    
+    call sd_send_command
+    
+    
+    ;toggle clk wait for response
+_sd_wait_ack:
+    movlw 0xff
+    call ssp_write
+    movwf sd_temp
+    
+    incf sd_tries_count, f
+    movlw SD_TRIES_MAX
+    xorwf sd_tries_count, w
+    bz sd_timeout
+    
+    movlw 0x01
+    xorwf sd_temp, w
+    bnz _sd_wait_ack
+    
+    bsf SD_CS_LAT, SD_CS_PIN
+    
+    nop
+    clrf sd_tries_count
+    
+    bcf SD_CS_LAT, SD_CS_PIN
+    
+    ;sending CMD8
+;    movlw 0x48
+;    call ssp_write
+;    
+;    movlw 0x00
+;    call ssp_write
+;    movlw 0x00
+;    call ssp_write
+;    movlw 0x01
+;    call ssp_write
+;    movlw 0xAA
+;    call ssp_write
+;    
+;    ;crc
+;    movlw 0x87
+;    call ssp_write
+    
+    movlw 0x08
+    movwf sd_data
+    clrf sd_data+1
+    clrf sd_data+2
+    movlw 0x01
+    movwf sd_data+3
+    movlw 0xAA
+    movwf sd_data+4
+    
+    call sd_send_command
+    
+_sd_wait_ack2:
+    movlw 0xff
+    call ssp_write
+    movwf sd_temp
+    
+    incf sd_tries_count, f
+    movlw SD_TRIES_MAX
+    xorwf sd_tries_count, w
+    bz sd_timeout
+    
+    movlw 0x01
+    xorwf sd_temp, w
+    bnz _sd_wait_ack2
+    
+    movlw 0x05                             ; invalid command meaning this is a ver.1 SD
+    xorwf sd_temp, w
+    bz _sd_ver1_handle
+    
+    bra init_done
+    
+_sd_ver1_handle:
+    
+    bra init_done
+    
+sd_timeout:
+    movlw 'T'
+    call usart_putchar
+    
+    bsf sd_status, SD_TIMEOUT
+    bcf sd_status, SD_VALID
+    
+init_done:
+    bsf SD_CS_LAT, SD_CS_PIN
+    
+    return
 	  
+;---------------------------------------------------
+sd_send_command:
+    ; sd_data array should be filled
+    ;command
+    movlw 0x40
+    iorwf sd_data, f
+    movf sd_data, w
+    call ssp_write
+    
+    ;args
+    movf sd_data+1, w
+    call ssp_write
+    movf sd_data+2, w
+    call ssp_write
+    movf sd_data+3, w
+    call ssp_write
+    movf sd_data+4, w
+    call ssp_write
+    
+    ;crc
+    call sd_get_crc
+    call ssp_write
+    
+    return
+;---------------------------------------------------
+sd_get_crc:
+    
+    movf sd_data, w
+    xorlw 0x40
+    btfsc STATUS, Z
+    retlw 0x95
+    movf sd_data, w
+    xorlw 0x48
+    btfsc STATUS, Z
+    retlw 0x87
+    retlw 0x01                       ; default crc
+    
+    return
+    
+;---------------------------------------------------    
 mcu_init:
     ;setting high speed oscillator
     movlw b'01110100'
@@ -897,6 +1214,11 @@ mcu_init:
 ;    bra wait_for_tmr2f
     
     ;bcf TRISC, RC2
+    movlw .32                           ; 250Khz
+    movwf PR2
+;    ;Timer2 setup
+    movlw b'00000100'                 ; no prescalar, 1:4 postscalar, 1:16 prescalar
+    movwf T2CON
     
     return
 ;---------------------------------------------------------------- 
@@ -1144,12 +1466,29 @@ _wr_sram_from_rom:
 ds12887_write:
     ;ds12887_reg and ds12887_val should be set
     ;set latch AS pin as high
+    bsf SRAM_OE_LAT, SRAM_OE_PIN
+    bsf Z80_IOREQ_LAT, Z80_IOREQ_PIN
+    
+    clrf addressbus_val+1
+    bcf addressbus_val+1, 0
+    movlw 0x02                   ;address of ds12887
+    movwf addressbus_val
+    call addressbus_write
+    
+    nop
+    nop
+    nop
+    
     clrf addressbus_val+1
     bsf addressbus_val+1, 0
     movlw 0x02                   ;address of ds12887
     movwf addressbus_val
     call addressbus_write
     
+    nop
+    nop
+    nop
+    nop
     nop
     
     clrf addressbus_val+1
@@ -1167,8 +1506,10 @@ ds12887_write:
     nop
     nop
     nop
+    nop
     
     bcf SRAM_WE_LAT, SRAM_WE_PIN
+    nop
     nop
     nop
     nop
@@ -1176,6 +1517,9 @@ ds12887_write:
     
     movf ds12887_val, w
     call databus_write
+    
+    nop
+    nop
     
     bsf SRAM_WE_LAT, SRAM_WE_PIN
     bsf Z80_IOREQ_LAT, Z80_IOREQ_PIN
@@ -1420,6 +1764,7 @@ print_timestamp:
     return
 ;-------------------------------------------------------    
 process_request:
+    _DI_
     movlw 0xf0
     xorwf xfer_addr, f
     swapf xfer_addr
@@ -1442,6 +1787,7 @@ process_request:
     call databusmode_set
     bsf Z80_WAITRES_LAT, Z80_WAITRES_PIN
     bsf Z80_BUSREQ_LAT, Z80_BUSREQ_PIN
+    _EI_
     
     return
 ;------------------------------------------------------- 

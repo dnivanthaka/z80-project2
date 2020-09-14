@@ -13,8 +13,12 @@ ssp_init:
     ;bcf TRISA, TRISA5            ; SS as input
     
     clrf SSP1CON1
+    ;clrf SSP1STAT
     clrf SSP1BUF
     bcf PIR1, SSP1IF
+    
+    movlw 0x03                     ;TMR2/2 drives the clock
+    movwf SSP1CON1
     
     ;movlw 0x3F
     ;andwf SSPSTAT, f
@@ -22,7 +26,7 @@ ssp_init:
     ;movlw 0x40
     ;movlw 0
     ;movwf SSPSTAT
-    bsf	SSP1STAT, CKE
+    bcf	SSP1STAT, CKE
     bcf	SSP1STAT, SMP
     
     ;bsf SSP1CON1, CKP
@@ -31,11 +35,15 @@ ssp_init:
     ;movlw 0x20
     ;movwf SSPCON1
     
+;    movlw 0x27
+;    movwf SSP1ADD
+    
     ;movlw 0x20
     ;iorwf SSPCON1, f
-    bcf SSP1CON1, CKP
+    bsf SSP1CON1, CKP
+    ;bsf SSP1CON1, 1 ;FoSC/64
     ;bsf SSP1CON1, 0 ; FoSC/16
-    bsf SSP1CON1, SSPEN
+    bsf SSP1CON1, SSPEN           ; SSPEN
     
     return
 ;-------------------------------------------------------------
@@ -54,7 +62,6 @@ ssp_write:
     movf TXDATA, w
     movwf SSP1BUF
     ;BSF T2CON, TMR2ON
-    
     
 write_complete:
     btfss PIR1, SSP1IF
