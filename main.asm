@@ -152,14 +152,14 @@
 #define		Z80_WAITRES_TRIS     TRISB
 #define		Z80_WAITRES_PORT     PORTB
   
-#define         SD_CS_PIN            1
-#define         SD_CS_LAT            LATB
-#define         SD_CS_TRIS           TRISB
-  
-#define         SD_TRIES_MAX         40
-#define		SD_VALID             0
-#define         SD_TIMEOUT           1
-#define         SD_TYPE              2
+;#define         SD_CS_PIN            1
+;#define         SD_CS_LAT            LATB
+;#define         SD_CS_TRIS           TRISB
+;  
+;#define         SD_TRIES_MAX         40
+;#define		SD_VALID             0
+;#define         SD_TIMEOUT           1
+;#define         SD_TYPE              2
 
 
 #define _EI_ bsf INTCON, 7 ; GIE
@@ -236,7 +236,12 @@ EXTERN usart_ascii2hex
 EXTERN usart_readline
 EXTERN usart_rxline
 	    
+EXTERN sd_data
+EXTERN sd_init
+EXTERN sd_read_block	    
+	    
 EXTERN rom_data
+	    
 	    
 SRAM_WRITE MACRO ADDR, VAL
 	    movlw ADDR & 0xff
@@ -307,10 +312,10 @@ comm_buffer RES 16
 comm_count  RES 1
 comm_idx    RES 1
     
-sd_temp     RES 1
-sd_data     RES 6
-sd_tries_count RES 1
-sd_status   RES 1
+;sd_temp     RES 1
+;sd_data     RES 6
+;sd_tries_count RES 1
+;sd_status   RES 1
  
 ;------------------------------------------------------------------------------
 ; EEPROM INITIALIZATION
@@ -512,9 +517,9 @@ START
 	  bcf Z80_RESET_TRIS, Z80_RESET_PIN
 	  bcf Z80_RESET_LAT, Z80_RESET_PIN
 	  
-	  ;sd card module cs
-	  bsf SD_CS_LAT, SD_CS_PIN
-	  bcf SD_CS_TRIS, SD_CS_PIN
+;	  ;sd card module cs
+;	  bsf SD_CS_LAT, SD_CS_PIN
+;	  bcf SD_CS_TRIS, SD_CS_PIN
 	  
 	  call databus_init
 	  call addressbus_init
@@ -533,6 +538,14 @@ START
 	  call ssp_init
 	  
 	  call sd_init
+	  
+	  clrf sd_data
+	  clrf sd_data+1
+	  clrf sd_data+2
+	  clrf sd_data+3
+	  clrf sd_data+4
+	  
+	  call sd_read_block
 	  
 	  clrf comm_idx
 	  clrf xfer_status
@@ -969,179 +982,214 @@ _wait_busack2:
           bra work_loop                      ; loop program counter
 	  
 ;---------------------------------------------------
-sd_init:
-    movlw .1
-    call delay_millis
-    
-    clrf sd_status
-    clrf sd_tries_count
-    
-    bsf SD_CS_LAT, SD_CS_PIN
-    
-    movlw .10
-    movwf sd_temp
-    
-    ;send at least 10 bytes for initialization, min 74 clock pulses
-_sd_clk_pulse:
-    movlw 0xff
-    call ssp_write
-    
-    decfsz sd_temp, f
-    bra _sd_clk_pulse
-    
-    ;select sd
-    bcf SD_CS_LAT, SD_CS_PIN
-    
-    ;send CMD0, SPI mode enable
-;    movlw 0x40
+;sd_init:
+;    movlw .1
+;    call delay_millis
+;    
+;    clrf sd_status
+;    clrf sd_tries_count
+;    
+;    bsf SD_CS_LAT, SD_CS_PIN
+;    
+;    movlw .10
+;    movwf sd_temp
+;    
+;    ;send at least 10 bytes for initialization, min 74 clock pulses
+;_sd_clk_pulse:
+;    movlw 0xff
 ;    call ssp_write
 ;    
-;    movlw 0x00
-;    call ssp_write
-;    movlw 0x00
-;    call ssp_write
-;    movlw 0x00
-;    call ssp_write
-;    movlw 0x00
-;    call ssp_write
+;    decfsz sd_temp, f
+;    bra _sd_clk_pulse
 ;    
-;    ;crc
-;    movlw 0x95
-;    call ssp_write
-    movlw 0x00
-    movwf sd_data
-    movwf sd_data+1
-    movwf sd_data+2
-    movwf sd_data+3
-    movwf sd_data+4
-    
-    call sd_send_command
-    
-    
-    ;toggle clk wait for response
-_sd_wait_ack:
-    movlw 0xff
-    call ssp_write
-    movwf sd_temp
-    
-    incf sd_tries_count, f
-    movlw SD_TRIES_MAX
-    xorwf sd_tries_count, w
-    bz sd_timeout
-    
-    movlw 0x01
-    xorwf sd_temp, w
-    bnz _sd_wait_ack
-    
-    bsf SD_CS_LAT, SD_CS_PIN
-    
-    nop
-    clrf sd_tries_count
-    
-    bcf SD_CS_LAT, SD_CS_PIN
-    
-    ;sending CMD8
-;    movlw 0x48
-;    call ssp_write
+;    ;select sd
+;    bcf SD_CS_LAT, SD_CS_PIN
 ;    
+;    ;send CMD0, SPI mode enable
 ;    movlw 0x00
+;    movwf sd_data
+;    movwf sd_data+1
+;    movwf sd_data+2
+;    movwf sd_data+3
+;    movwf sd_data+4
+;    
+;    call sd_send_command
+;    
+;    ;toggle clk wait for response
+;_sd_wait_ack:
+;    movlw 0xff
 ;    call ssp_write
-;    movlw 0x00
-;    call ssp_write
+;    movwf sd_temp
+;    
+;    incf sd_tries_count, f
+;    movlw SD_TRIES_MAX
+;    xorwf sd_tries_count, w
+;    bz sd_timeout
+;    
 ;    movlw 0x01
-;    call ssp_write
-;    movlw 0xAA
-;    call ssp_write
+;    xorwf sd_temp, w
+;    bnz _sd_wait_ack
 ;    
-;    ;crc
-;    movlw 0x87
+;    bsf SD_CS_LAT, SD_CS_PIN
+;    
+;    nop
+;    clrf sd_tries_count
+;    
+;    bcf SD_CS_LAT, SD_CS_PIN
+;    
+;    ;sending CMD8
+;    movlw 0x08
+;    movwf sd_data
+;    clrf sd_data+1
+;    clrf sd_data+2
+;    movlw 0x01
+;    movwf sd_data+3
+;    movlw 0xAA
+;    movwf sd_data+4
+;    
+;    call sd_send_command
+;    
+;_sd_wait_ack2:
+;    movlw 0xff
 ;    call ssp_write
-    
-    movlw 0x08
-    movwf sd_data
-    clrf sd_data+1
-    clrf sd_data+2
-    movlw 0x01
-    movwf sd_data+3
-    movlw 0xAA
-    movwf sd_data+4
-    
-    call sd_send_command
-    
-_sd_wait_ack2:
-    movlw 0xff
-    call ssp_write
-    movwf sd_temp
-    
-    incf sd_tries_count, f
-    movlw SD_TRIES_MAX
-    xorwf sd_tries_count, w
-    bz sd_timeout
-    
-    movlw 0x01
-    xorwf sd_temp, w
-    bnz _sd_wait_ack2
-    
-    movlw 0x05                             ; invalid command meaning this is a ver.1 SD
-    xorwf sd_temp, w
-    bz _sd_ver1_handle
-    
-    bra init_done
-    
-_sd_ver1_handle:
-    
-    bra init_done
-    
-sd_timeout:
-    movlw 'T'
-    call usart_putchar
-    
-    bsf sd_status, SD_TIMEOUT
-    bcf sd_status, SD_VALID
-    
-init_done:
-    bsf SD_CS_LAT, SD_CS_PIN
-    
-    return
+;    movwf sd_temp
+;    
+;    incf sd_tries_count, f
+;    movlw SD_TRIES_MAX
+;    xorwf sd_tries_count, w
+;    bz sd_timeout
+;    
+;    movlw 0x05                             ; invalid command meaning this is a ver.1 SD
+;    xorwf sd_temp, w
+;    bz _sd_ver1_handle
+;    
+;    movlw 0x01
+;    xorwf sd_temp, w
+;    bnz _sd_wait_ack2
+;    
+;    call ssp_read
+;    call ssp_read
+;    call ssp_read			    ;mask lower 4bits
+;    andlw 0x0f
+;    xorlw 0x01
+;    bnz _sd_init_error
+;
+;    call ssp_read
+;    xorlw 0xAA
+;    bnz _sd_init_error
+;    
+;    clrf sd_tries_count
+;    
+;    ;ACMD41
+;    movlw 0xE9
+;    movwf sd_data
+;    
+;    movlw 0x40
+;    movwf sd_data+1
+;    clrf sd_data+2
+;    clrf sd_data+3
+;    clrf sd_data+4
+;    
+;    call sd_send_command
+;    
+;_sd_wait_ack3:
+;    movlw 0xff
+;    call ssp_write
+;    movwf sd_temp
+;    
+;    incf sd_tries_count, f
+;    movlw SD_TRIES_MAX
+;    xorwf sd_tries_count, w
+;    bz sd_timeout
+;    
+;    movlw 0x01
+;    xorwf sd_temp, w
+;    bz _sd_wait_ack3
+;    
+;    movlw 'D'
+;    call usart_putchar
+;    
+;    bsf sd_status, SD_VALID
+;    bsf sd_status, SD_TYPE                 ; v2
+;    
+;    ;set high speed spi
+;    bcf SSP1CON1, SSPEN
+;    
+;    movlw 0x01                     ;FoSC/16
+;    movwf SSP1CON1
+;    
+;    bsf SSP1CON1, CKP
+;    
+;    bsf SSP1CON1, SSPEN
+;    
+;    clrf T2CON                    ;stop tmr2
+;    clrf PR2
+;    ;----------
+;    
+;    bra init_done
+;    
+;_sd_ver1_handle:
+;    
+;    bra init_done
+;    
+;sd_timeout:
+;    movlw 'T'
+;    call usart_putchar
+;    
+;    bsf sd_status, SD_TIMEOUT
+;    bcf sd_status, SD_VALID
+;    
+;    bra init_done
+;    
+;_sd_init_error:
+;    bcf sd_status, SD_VALID
+;    
+;    movlw 'E'
+;    call usart_putchar
+;    
+;init_done:
+;    bsf SD_CS_LAT, SD_CS_PIN
+;    
+;    return
 	  
 ;---------------------------------------------------
-sd_send_command:
-    ; sd_data array should be filled
-    ;command
-    movlw 0x40
-    iorwf sd_data, f
-    movf sd_data, w
-    call ssp_write
-    
-    ;args
-    movf sd_data+1, w
-    call ssp_write
-    movf sd_data+2, w
-    call ssp_write
-    movf sd_data+3, w
-    call ssp_write
-    movf sd_data+4, w
-    call ssp_write
-    
-    ;crc
-    call sd_get_crc
-    call ssp_write
-    
-    return
-;---------------------------------------------------
-sd_get_crc:
-    
-    movf sd_data, w
-    xorlw 0x40
-    btfsc STATUS, Z
-    retlw 0x95
-    movf sd_data, w
-    xorlw 0x48
-    btfsc STATUS, Z
-    retlw 0x87
-    retlw 0x01                       ; default crc
-    
-    return
+;sd_send_command:
+;    ; sd_data array should be filled
+;    ;command
+;    movlw 0x40
+;    iorwf sd_data, f
+;    movf sd_data, w
+;    call ssp_write
+;    
+;    ;args
+;    movf sd_data+1, w
+;    call ssp_write
+;    movf sd_data+2, w
+;    call ssp_write
+;    movf sd_data+3, w
+;    call ssp_write
+;    movf sd_data+4, w
+;    call ssp_write
+;    
+;    ;crc
+;    call sd_get_crc
+;    call ssp_write
+;    
+;    return
+;;---------------------------------------------------
+;sd_get_crc:
+;    
+;    movf sd_data, w
+;    xorlw 0x40
+;    btfsc STATUS, Z
+;    retlw 0x95
+;    movf sd_data, w
+;    xorlw 0x48
+;    btfsc STATUS, Z
+;    retlw 0x87
+;    retlw 0x01                       ; default crc
+;    
+;    return
     
 ;---------------------------------------------------    
 mcu_init:
@@ -1214,11 +1262,11 @@ mcu_init:
 ;    bra wait_for_tmr2f
     
     ;bcf TRISC, RC2
-    movlw .32                           ; 250Khz
-    movwf PR2
-;    ;Timer2 setup
-    movlw b'00000100'                 ; no prescalar, 1:4 postscalar, 1:16 prescalar
-    movwf T2CON
+;    movlw .32                           ; 250Khz
+;    movwf PR2
+;;    ;Timer2 setup
+;    movlw b'00000100'                 ; no prescalar, 1:4 postscalar, 1:16 prescalar
+;    movwf T2CON
     
     return
 ;---------------------------------------------------------------- 
@@ -1426,6 +1474,7 @@ wait_busack:
     bra  wait_busack    
     
     nop
+    nop
     
     return
 ;-------------------------------------------------------
@@ -1457,7 +1506,7 @@ _wr_sram_from_rom:
     incf addressbus_val+1, f
     
     movf addressbus_val+1, w
-    xorlw 0x02
+    xorlw 0x02			    ; 256 * 2 bytes to transfer
     bnz _wr_sram_from_rom
     return
     

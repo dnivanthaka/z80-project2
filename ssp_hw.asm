@@ -17,8 +17,8 @@ ssp_init:
     clrf SSP1BUF
     bcf PIR1, SSP1IF
     
-    movlw 0x03                     ;TMR2/2 drives the clock
-    movwf SSP1CON1
+;    movlw 0x03                     ;TMR2/2 drives the clock
+;    movwf SSP1CON1
     
     ;movlw 0x3F
     ;andwf SSPSTAT, f

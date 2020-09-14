@@ -57,17 +57,17 @@ OBJECTDIR=build/${CND_CONF}/${IMAGE_TYPE}
 DISTDIR=dist/${CND_CONF}/${IMAGE_TYPE}
 
 # Source Files Quoted if spaced
-SOURCEFILES_QUOTED_IF_SPACED=main.asm delays.asm ssp_hw.asm addressbus.asm databus.asm rom.asm usart_hw.asm usart_sw.asm
+SOURCEFILES_QUOTED_IF_SPACED=main.asm delays.asm ssp_hw.asm addressbus.asm databus.asm rom.asm usart_hw.asm usart_sw.asm sd.asm
 
 # Object Files Quoted if spaced
-OBJECTFILES_QUOTED_IF_SPACED=${OBJECTDIR}/main.o ${OBJECTDIR}/delays.o ${OBJECTDIR}/ssp_hw.o ${OBJECTDIR}/addressbus.o ${OBJECTDIR}/databus.o ${OBJECTDIR}/rom.o ${OBJECTDIR}/usart_hw.o ${OBJECTDIR}/usart_sw.o
-POSSIBLE_DEPFILES=${OBJECTDIR}/main.o.d ${OBJECTDIR}/delays.o.d ${OBJECTDIR}/ssp_hw.o.d ${OBJECTDIR}/addressbus.o.d ${OBJECTDIR}/databus.o.d ${OBJECTDIR}/rom.o.d ${OBJECTDIR}/usart_hw.o.d ${OBJECTDIR}/usart_sw.o.d
+OBJECTFILES_QUOTED_IF_SPACED=${OBJECTDIR}/main.o ${OBJECTDIR}/delays.o ${OBJECTDIR}/ssp_hw.o ${OBJECTDIR}/addressbus.o ${OBJECTDIR}/databus.o ${OBJECTDIR}/rom.o ${OBJECTDIR}/usart_hw.o ${OBJECTDIR}/usart_sw.o ${OBJECTDIR}/sd.o
+POSSIBLE_DEPFILES=${OBJECTDIR}/main.o.d ${OBJECTDIR}/delays.o.d ${OBJECTDIR}/ssp_hw.o.d ${OBJECTDIR}/addressbus.o.d ${OBJECTDIR}/databus.o.d ${OBJECTDIR}/rom.o.d ${OBJECTDIR}/usart_hw.o.d ${OBJECTDIR}/usart_sw.o.d ${OBJECTDIR}/sd.o.d
 
 # Object Files
-OBJECTFILES=${OBJECTDIR}/main.o ${OBJECTDIR}/delays.o ${OBJECTDIR}/ssp_hw.o ${OBJECTDIR}/addressbus.o ${OBJECTDIR}/databus.o ${OBJECTDIR}/rom.o ${OBJECTDIR}/usart_hw.o ${OBJECTDIR}/usart_sw.o
+OBJECTFILES=${OBJECTDIR}/main.o ${OBJECTDIR}/delays.o ${OBJECTDIR}/ssp_hw.o ${OBJECTDIR}/addressbus.o ${OBJECTDIR}/databus.o ${OBJECTDIR}/rom.o ${OBJECTDIR}/usart_hw.o ${OBJECTDIR}/usart_sw.o ${OBJECTDIR}/sd.o
 
 # Source Files
-SOURCEFILES=main.asm delays.asm ssp_hw.asm addressbus.asm databus.asm rom.asm usart_hw.asm usart_sw.asm
+SOURCEFILES=main.asm delays.asm ssp_hw.asm addressbus.asm databus.asm rom.asm usart_hw.asm usart_sw.asm sd.asm
 
 
 CFLAGS=
@@ -158,6 +158,14 @@ ${OBJECTDIR}/usart_sw.o: usart_sw.asm  nbproject/Makefile-${CND_CONF}.mk
 	@${DEP_GEN} -d "${OBJECTDIR}/usart_sw.o"
 	@${FIXDEPS} "${OBJECTDIR}/usart_sw.o.d" $(SILENT) -rsi ${MP_AS_DIR} -c18 
 	
+${OBJECTDIR}/sd.o: sd.asm  nbproject/Makefile-${CND_CONF}.mk
+	@${MKDIR} "${OBJECTDIR}" 
+	@${RM} ${OBJECTDIR}/sd.o.d 
+	@${RM} ${OBJECTDIR}/sd.o 
+	@${FIXDEPS} dummy.d -e "${OBJECTDIR}/sd.err" $(SILENT) -c ${MP_AS} $(MP_EXTRA_AS_PRE) -d__DEBUG -d__MPLAB_DEBUGGER_PK3=1 -q -p$(MP_PROCESSOR_OPTION) -u  -l\\\"${OBJECTDIR}/sd.lst\\\" -e\\\"${OBJECTDIR}/sd.err\\\" $(ASM_OPTIONS)    -o\\\"${OBJECTDIR}/sd.o\\\" \\\"sd.asm\\\" 
+	@${DEP_GEN} -d "${OBJECTDIR}/sd.o"
+	@${FIXDEPS} "${OBJECTDIR}/sd.o.d" $(SILENT) -rsi ${MP_AS_DIR} -c18 
+	
 else
 ${OBJECTDIR}/main.o: main.asm  nbproject/Makefile-${CND_CONF}.mk
 	@${MKDIR} "${OBJECTDIR}" 
@@ -222,6 +230,14 @@ ${OBJECTDIR}/usart_sw.o: usart_sw.asm  nbproject/Makefile-${CND_CONF}.mk
 	@${FIXDEPS} dummy.d -e "${OBJECTDIR}/usart_sw.err" $(SILENT) -c ${MP_AS} $(MP_EXTRA_AS_PRE) -q -p$(MP_PROCESSOR_OPTION) -u  -l\\\"${OBJECTDIR}/usart_sw.lst\\\" -e\\\"${OBJECTDIR}/usart_sw.err\\\" $(ASM_OPTIONS)    -o\\\"${OBJECTDIR}/usart_sw.o\\\" \\\"usart_sw.asm\\\" 
 	@${DEP_GEN} -d "${OBJECTDIR}/usart_sw.o"
 	@${FIXDEPS} "${OBJECTDIR}/usart_sw.o.d" $(SILENT) -rsi ${MP_AS_DIR} -c18 
+	
+${OBJECTDIR}/sd.o: sd.asm  nbproject/Makefile-${CND_CONF}.mk
+	@${MKDIR} "${OBJECTDIR}" 
+	@${RM} ${OBJECTDIR}/sd.o.d 
+	@${RM} ${OBJECTDIR}/sd.o 
+	@${FIXDEPS} dummy.d -e "${OBJECTDIR}/sd.err" $(SILENT) -c ${MP_AS} $(MP_EXTRA_AS_PRE) -q -p$(MP_PROCESSOR_OPTION) -u  -l\\\"${OBJECTDIR}/sd.lst\\\" -e\\\"${OBJECTDIR}/sd.err\\\" $(ASM_OPTIONS)    -o\\\"${OBJECTDIR}/sd.o\\\" \\\"sd.asm\\\" 
+	@${DEP_GEN} -d "${OBJECTDIR}/sd.o"
+	@${FIXDEPS} "${OBJECTDIR}/sd.o.d" $(SILENT) -rsi ${MP_AS_DIR} -c18 
 	
 endif
 
