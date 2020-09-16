@@ -28,14 +28,15 @@
     EXTERN usart_readline
     EXTERN usart_rxline
     
+    
     UDATA
     
     sd_temp	    RES 1
     sd_data	    RES 6	    ; MSB sd_data+1, LSB sd_data+5
     sd_tries_count  RES 1
     sd_byte_count   RES 2
-    sd_status	    RES 1
-    sd_block_buffer RES 16
+    sd_status	    RES 1   
+    sd_block_buffer RES 2
      
     CODE
     
@@ -123,7 +124,7 @@ _sd_wait_ack:
     movlw 0x01
     movwf sd_data+3
     movlw 0xAA
-    movwf sd_data+4
+    movwf sd_data+4                       ;MSB
     
     call sd_send_command
     
@@ -155,15 +156,21 @@ _sd_wait_ack2:
     call ssp_read
     xorlw 0xAA
     bnz _sd_init_error
+    call ssp_read
+;    call ssp_read
     
+    bsf SD_CS_LAT, SD_CS_PIN
+    
+        nop
     clrf sd_tries_count
     
-    ;ACMD41
-    movlw 0xE9
+    bcf SD_CS_LAT, SD_CS_PIN
+    
+;    ;CMD55
+    movlw 0x55
     movwf sd_data
     
-    movlw 0x40
-    movwf sd_data+1
+    clrf sd_data+1
     clrf sd_data+2
     clrf sd_data+3
     clrf sd_data+4
@@ -175,17 +182,111 @@ _sd_wait_ack3:
     call ssp_write
     movwf sd_temp
     
-    incf sd_tries_count, f
-    movlw SD_TRIES_MAX
-    xorwf sd_tries_count, w
-    bz sd_timeout
+;    incf sd_tries_count, f
+;    movlw  SD_TRIES_MAX
+;    xorwf sd_tries_count, w
+;    bz sd_timeout
     
-    movlw 0x01
+    movlw 0xff
     xorwf sd_temp, w
     bz _sd_wait_ack3
     
-    movlw 'D'
-    call usart_putchar
+    movf sd_temp, w
+    ;call ssp_read
+    call usart_hex2ascii
+;    call ssp_read
+;    call ssp_read
+;    call ssp_read
+;    call ssp_read
+    
+;    bsf SD_CS_LAT, SD_CS_PIN
+    
+;    nop
+    clrf sd_tries_count
+    
+;    bcf SD_CS_LAT, SD_CS_PIN
+    
+    ;ACMD41
+    movlw 0X41
+    movwf sd_data
+    
+    movlw 0x40
+    movwf sd_data+1
+    clrf sd_data+2
+    clrf sd_data+3
+    clrf sd_data+4
+    
+    call sd_send_command
+    
+_sd_wait_ack4:
+    movlw 0xff
+    call ssp_write
+    movwf sd_temp
+    
+;    incf sd_tries_count, f
+;    movlw  SD_TRIES_MAX
+;    xorwf sd_tries_count, w
+;    bz sd_timeout
+    
+    movlw 0x01
+    xorwf sd_temp, w
+    bnz _sd_wait_ack4
+    
+    ;call ssp_read
+    
+    ;call ssp_read
+    ;call ssp_read
+    ;call ssp_read
+;    call ssp_read
+    movf sd_temp, w
+    
+    call usart_hex2ascii
+    
+    ;bsf SD_CS_LAT, SD_CS_PIN
+    
+    ;nop
+    clrf sd_tries_count
+    
+    ;bcf SD_CS_LAT, SD_CS_PIN
+    
+    ;CMD58
+;    movlw 0X58  ;(40 + 18)
+;    movwf sd_data
+;    
+;    clrf sd_data+1
+;    clrf sd_data+2
+;    clrf sd_data+3
+;    clrf sd_data+4
+;    
+;    call sd_send_command
+;    
+;_sd_wait_ack5:
+;    movlw 0xff
+;    call ssp_write
+;    movwf sd_temp
+;    
+;;    incf sd_tries_count, f
+;;    movlw  SD_TRIES_MAX
+;;    xorwf sd_tries_count, w
+;;    bz sd_timeout
+;    
+;    movlw 0x01                      ; response byte
+;    xorwf sd_temp, w
+;    bnz _sd_wait_ack5
+;    
+;    call ssp_read
+;    ;movwf sd_temp
+;    call ssp_read
+;;    call ssp_read
+;    call ssp_read
+;    ;movwf sd_temp
+;    call ssp_read                   ;crc
+;    movwf sd_temp
+;    
+;    movf sd_temp, w
+;    andlw 0xD0
+;    
+;    call usart_hex2ascii
     
     bsf sd_status, SD_VALID
     bsf sd_status, SD_TYPE                 ; v2
@@ -243,7 +344,7 @@ sd_read_block:
     ;select sd
     bcf SD_CS_LAT, SD_CS_PIN
     ;valid address should be set on sd_data+1 to sd_data+3
-    movlw 0x51			;CMD 17
+    movlw 0x17			;CMD 17
     movwf sd_data
     
     call sd_send_command
@@ -253,14 +354,17 @@ _sd_wait_rd:
     call ssp_write
     movwf sd_temp
     
-    incf sd_tries_count, f
-    movlw SD_TRIES_MAX
-    xorwf sd_tries_count, w
-    bz sd_read_timeout
+;    incf sd_tries_count, f
+;    movlw .255
+;    xorwf sd_tries_count, w
+;    bz sd_read_timeout
+    
+;    movlw .5
+;    call delay_millis
     
     movlw 0xFE
     xorwf sd_temp, w
-    bz _sd_wait_rd
+    bnz _sd_wait_rd
     
    ; movlw 0x01
     clrf sd_byte_count			      ; 512 bytes + 2 checksum bytes

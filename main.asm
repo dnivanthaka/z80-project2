@@ -545,7 +545,7 @@ START
 	  clrf sd_data+3
 	  clrf sd_data+4
 	  
-	  call sd_read_block
+	  ;call sd_read_block
 	  
 	  clrf comm_idx
 	  clrf xfer_status

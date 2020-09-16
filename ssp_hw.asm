@@ -83,7 +83,7 @@ ssp_read:
     ;bcf T2CON, TMR2ON
     ;clrf TMR2
     
-    movlw 0
+    movlw 0xff
     movwf SSP1BUF
     ;BSF T2CON, TMR2ON
     
