@@ -1,0 +1,180 @@
+_sd_send_cmd55:
+    clrf sd_tries_count
+    
+;    ;CMD55
+    movlw 0x55
+    movwf sd_data
+    
+    clrf sd_data+1
+    clrf sd_data+2
+    clrf sd_data+3
+    clrf sd_data+4
+    
+    call sd_send_command
+    
+_sd_wait_ack3:
+    movlw 0xff
+    call ssp_write
+    movwf sd_temp
+    
+    incf sd_tries_count, f
+    movlw  SD_TRIES_MAX
+    xorwf sd_tries_count, w
+    bz sd_timeout
+    
+    movlw 0x05
+    xorwf sd_temp, w
+    ;bz _sd_send_cmd1
+    bnz _sd_wait_ack3
+    
+    movlw 0x01
+    xorwf sd_temp, w
+    bnz _sd_wait_ack3
+    
+    
+    ;movf sd_temp, w
+    ;call ssp_read
+    ;call usart_hex2ascii
+    call ssp_read
+    call ssp_read
+    call ssp_read
+    call ssp_read
+
+    bra _sd_send_acmd41
+    
+_sd_send_cmd1: 
+    
+    ;CMD1
+    movlw 0x01
+    movwf sd_data
+    
+    clrf sd_data+1
+    clrf sd_data+2
+    clrf sd_data+3
+    clrf sd_data+4
+    
+    call sd_send_command
+    
+_sd_wait_cmd1:
+    movlw 0xff
+    call ssp_write
+    movwf sd_temp
+    
+    incf sd_tries_count, f
+    movlw  SD_TRIES_MAX
+    xorwf sd_tries_count, w
+    bz sd_timeout
+    
+    movlw 0x01
+    xorwf sd_temp, w
+    bnz _sd_wait_cmd1
+    
+    call ssp_read
+    call ssp_read
+    call ssp_read
+    call ssp_read
+    
+    ;movlw 'H'
+    ;call usart_putchar
+    
+    ;bra _sd_send_cmd55
+    bra _sd_seq_done
+_sd_send_acmd41:
+;    bsf SD_CS_LAT, SD_CS_PIN
+    
+;    nop
+    
+    clrf sd_tries_count
+    
+;    bcf SD_CS_LAT, SD_CS_PIN
+    
+    ;ACMD41
+    movlw 0X41
+    movwf sd_data
+    
+    movlw 0x40
+    movwf sd_data+1
+    clrf sd_data+2
+    clrf sd_data+3
+    clrf sd_data+4
+    
+    call sd_send_command
+    
+_sd_wait_ack4:
+    movlw 0xff
+    call ssp_write
+    movwf sd_temp
+    
+    incf sd_tries_count, f
+    movlw  SD_TRIES_MAX
+    xorwf sd_tries_count, w
+    bz sd_timeout
+    
+    movlw 0x01
+    xorwf sd_temp, w
+    bnz _sd_send_cmd55
+    
+    movlw 0x00
+    xorwf sd_temp, w
+    bnz _sd_wait_ack4
+    
+    ;call ssp_read
+    
+    call ssp_read
+    call ssp_read
+    call ssp_read
+    call ssp_read
+    
+_sd_seq_done:
+;    movf sd_temp, w
+    
+;    call usart_hex2ascii
+;    call ssp_read
+    ;bsf SD_CS_LAT, SD_CS_PIN
+    
+    ;nop
+    clrf sd_tries_count
+    
+;    movlw .100
+;    call delay_millis
+    
+    ;bcf SD_CS_LAT, SD_CS_PIN
+    
+    ;CMD16
+;    movlw 0X59  ;(512 block size)
+;    movwf sd_data
+;    
+;    clrf sd_data+1	    ;MSB
+;    clrf sd_data+2
+;    clrf sd_data+3
+;    clrf sd_data+4	    ;LSB
+;    
+;    call sd_send_command
+;    
+;_sd_wait_ack5:
+;    movlw 0xff
+;    call ssp_write
+;    movwf sd_temp
+;    
+;;    incf sd_tries_count, f
+;;    movlw  SD_TRIES_MAX
+;;    xorwf sd_tries_count, w
+;;    bz sd_timeout
+;    
+;    movlw 0x01                      ; response byte
+;    xorwf sd_temp, w
+;    bnz _sd_wait_ack5
+;    
+;    call ssp_read
+;    ;movwf sd_temp
+;    call ssp_read
+;;    call ssp_read
+;    call ssp_read
+;    ;movwf sd_temp
+;    call ssp_read                   ;crc
+;    movwf sd_temp
+;    
+;    movf sd_temp, w
+;    andlw 0xD0
+;    
+;    call usart_hex2ascii

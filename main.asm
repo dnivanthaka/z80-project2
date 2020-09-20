@@ -152,6 +152,12 @@
 #define		Z80_WAITRES_TRIS     TRISB
 #define		Z80_WAITRES_PORT     PORTB
   
+  
+  
+#define         SD_CS_PIN            1
+#define         SD_CS_LAT            LATB
+#define         SD_CS_TRIS           TRISB  
+  
 ;#define         SD_CS_PIN            1
 ;#define         SD_CS_LAT            LATB
 ;#define         SD_CS_TRIS           TRISB
@@ -518,8 +524,8 @@ START
 	  bcf Z80_RESET_LAT, Z80_RESET_PIN
 	  
 ;	  ;sd card module cs
-;	  bsf SD_CS_LAT, SD_CS_PIN
-;	  bcf SD_CS_TRIS, SD_CS_PIN
+	  bsf SD_CS_LAT, SD_CS_PIN
+	  bcf SD_CS_TRIS, SD_CS_PIN
 	  
 	  call databus_init
 	  call addressbus_init
@@ -537,7 +543,11 @@ START
 	  
 	  call ssp_init
 	  
+	  _DI_
 	  call sd_init
+	  
+	  movlw .150
+	  call delay_millis
 	  
 	  clrf sd_data
 	  clrf sd_data+1
@@ -545,8 +555,8 @@ START
 	  clrf sd_data+3
 	  clrf sd_data+4
 	  
-	  ;call sd_read_block
-	  
+	  call sd_read_block
+	  _EI_
 	  clrf comm_idx
 	  clrf xfer_status
 	  
@@ -1262,11 +1272,11 @@ mcu_init:
 ;    bra wait_for_tmr2f
     
     ;bcf TRISC, RC2
-;    movlw .32                           ; 250Khz
-;    movwf PR2
-;;    ;Timer2 setup
-;    movlw b'00000100'                 ; no prescalar, 1:4 postscalar, 1:16 prescalar
-;    movwf T2CON
+    movlw .32                           ; 250Khz
+    movwf PR2
+;    ;Timer2 setup
+    movlw b'00000100'                 ; no prescalar, 1:4 postscalar, 1:16 prescalar
+    movwf T2CON
     
     return
 ;---------------------------------------------------------------- 

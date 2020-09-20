@@ -17,8 +17,8 @@ ssp_init:
     clrf SSP1BUF
     bcf PIR1, SSP1IF
     
-;    movlw 0x03                     ;TMR2/2 drives the clock
-;    movwf SSP1CON1
+    movlw 0x03                     ;TMR2/2 drives the clock
+    movwf SSP1CON1
     
     ;movlw 0x3F
     ;andwf SSPSTAT, f
@@ -26,10 +26,10 @@ ssp_init:
     ;movlw 0x40
     ;movlw 0
     ;movwf SSPSTAT
-    bcf	SSP1STAT, CKE
-    bcf	SSP1STAT, SMP
+    bsf	SSPSTAT, CKE
+    bsf	SSPSTAT, SMP
     
-    ;bsf SSP1CON1, CKP
+    ;bsf SSPCON1, CKP
     
     ;movlw 0x11
     ;movlw 0x20
@@ -75,9 +75,10 @@ write_complete:
 ;------------------------------------------------------------
 ssp_read:
     bcf PIR1, SSP1IF
+    bcf SSP1CON1, WCOL
     ;bcf SSPCON1, SSPOV
     
-    movf SSP1BUF, w
+    ;movf SSP1BUF, w
     ;movwf RXDATA
     
     ;bcf T2CON, TMR2ON
